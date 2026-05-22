@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitignore" />
+  </Folder>
+  <Project Path="API/Aucy.API.csproj" />
+  <Project Path="Data/Aucy.Data.csproj" Id="d91c1034-69f6-4b68-8f64-b0889e97c0aa" />
+  <Project Path="Domain/Aucy.Domain.csproj" Id="8ead6c59-6121-4acc-bf55-9ccc85f14a27" />
+</Solution>
