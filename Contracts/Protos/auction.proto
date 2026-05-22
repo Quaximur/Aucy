@@ -1,0 +1,124 @@
+﻿syntax = "proto3";
+
+option csharp_namespace = "AuctionGrpc";
+
+import "google/protobuf/timestamp.proto";
+
+service AuctionService {
+  rpc CreateLot (CreateLotRequest) returns (CreateLotResponse);
+  
+  rpc RemoveLot (RemoveLotRequest) returns (RemoveLotResponse);
+  
+  rpc CreateBid (CreateBidRequest) returns (CreateBidResponse);
+  
+  rpc BuyoutLot (BuyoutLotRequest) returns (BuyoutLotResponse);
+  
+  rpc GetLots (GetLotsRequest) returns (GetLotsResponse);
+  
+  rpc GetLotInfo (GetLotInfoRequest) returns (GetLotInfoResponse);
+  
+  rpc GetMyLots (GetOwnLotsRequest) returns (GetOwnLotsResponse);
+}
+
+message Item {
+  string item_id = 1;   
+  string item_type = 2;  
+  string item_name = 3; 
+}
+
+message Lot {
+  string id = 1;
+  string seller_id = 2;       
+  Item item = 3;              
+  uint64 price = 4;     
+  
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message Bid {
+  string id = 1;
+  string lot_id = 2;
+  string bidder_id = 3;
+  uint64 currency = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message CreateLotRequest {
+  string seller_id = 1;
+  string item_id = 2;
+  uint64 price = 3;
+}
+
+message RemoveLotRequest {
+  string lot_id = 1;
+  string requester_id = 2;          
+}
+
+message CreateBidRequest {
+  string lot_id = 1;
+  string bidder_id = 2;
+  uint64 currency= 3;               
+}
+
+message BuyoutLotRequest {
+  string lot_id = 1;
+  string buyer_id = 2;
+}
+
+message GetLotsRequest {
+  string item_type = 1;      
+  string item_name = 2;      
+  uint32 page = 3;                 
+  uint32 page_size = 4;            
+}
+
+message GetLotInfoRequest {
+  string lot_id = 1;
+}
+
+message GetOwnLotsRequest {
+  string seller_id = 1;
+}
+
+message CreateLotResponse {
+  bool success = 1;
+  string error_message = 2;         
+  Lot lot = 3;                      
+}
+
+message RemoveLotResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message CreateBidResponse {
+  bool success = 1;
+  string error_message = 2;
+  Bid bid = 3;                    
+}
+
+message BuyoutLotResponse {
+  bool success = 1;
+  string error_message = 2;
+  Lot lot = 3;                    
+}
+
+message GetLotsResponse {
+  bool success = 1;
+  string error_message = 2;
+  repeated Lot lots = 3;
+  uint32 total_count = 4;           
+}
+
+message GetLotInfoResponse {
+  bool success = 1;
+  string error_message = 2;
+  Lot lot = 3;
+  repeated Bid bid_history = 4;   
+}
+
+message GetOwnLotsResponse {
+  bool success = 1;
+  string error_message = 2;
+  repeated Lot lots = 3;
+}
