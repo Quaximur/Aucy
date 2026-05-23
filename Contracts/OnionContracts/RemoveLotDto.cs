@@ -6,11 +6,9 @@ namespace Aucy.Contracts.OnionContracts;
 public class RemoveLotDto
 {
     [Key(0)] public string LotId { get; set; }
-    [Key(1)] public string OwnerUserId { get; set; }
 
-    public RemoveLotDto(string lotId, string ownerUserId)
+    public RemoveLotDto(string lotId)
     {
         LotId = lotId;
-        OwnerUserId = ownerUserId;
     }
 }
