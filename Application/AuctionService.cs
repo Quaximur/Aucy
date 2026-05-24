@@ -6,32 +6,31 @@ namespace Aucy.Application;
 
 public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 {
-    public async UnaryResult<LotDto> CreateLot(CreateLotDto createlotDto)
+    public UnaryResult<ItemWithLotsAndBidsDto> GetItem(GetItemDto request)
     {
         throw new NotImplementedException();
     }
 
-    public async UnaryResult<LotWithBidsDto> GetLot(GetLotDto request)
+    public UnaryResult<ItemsDto> GetItems(GetItemsDto request)
     {
         throw new NotImplementedException();
     }
 
-    public async UnaryResult<LotsDto> GetLots(GetLotsDto request)
+    public UnaryResult<LotDto> CreateLot(CreateLotDto request)
     {
         throw new NotImplementedException();
     }
 
-    public UnaryResult<LotsDto> GetOwnLots()
+    public UnaryResult<LotsWithItemsDto> GetOwnLots()
+    {
+        throw new NotImplementedException();
+    }
+    public UnaryResult<string> RemoveLot(RemoveLotDto request)
     {
         throw new NotImplementedException();
     }
 
-    public async UnaryResult<string> RemoveLot(RemoveLotDto request)
-    {
-        throw new NotImplementedException();
-    }
-
-    public async UnaryResult<BidDto> CreateBid(CreateBidDto request)
+    public UnaryResult<BidDto> CreateBid(CreateBidDto request)
     {
         throw new NotImplementedException();
     }

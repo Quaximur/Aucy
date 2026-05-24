@@ -6,22 +6,20 @@ namespace Aucy.Contracts.OnionContracts;
 public class BidWithItemDto
 {
     [Key(0)] public string Id { get; set; }
-    [Key(1)] public string LotId { get; set; }
-    [Key(2)] public string BidderUserId { get; set; }
-    [Key(3)] public long BidPrice { get; set; }
-    [Key(4)] public int BidAmount { get; set; }
-    [Key(5)] public DateTime CreatedAt { get; set; }
-    [Key(6)] public LotDto Lot { get; set; }
+    [Key(1)] public string BidderUserId { get; set; }
+    [Key(2)] public long BidPrice { get; set; }
+    [Key(3)] public int BidAmount { get; set; }
+    [Key(4)] public DateTime CreatedAt { get; set; }
+    [Key(5)] public ItemDto Item { get; set; }
 
-    public BidWithItemDto(string id, string lotId, string bidderUserId, long bidPrice, int bidAmount, DateTime createdAt, 
-        LotDto lotDto)
+    public BidWithItemDto(string id, string bidderUserId, long bidPrice, int bidAmount, DateTime createdAt,
+        ItemDto item)
     {
         Id = id;
-        LotId = lotId;
         BidderUserId = bidderUserId;
         BidPrice = bidPrice;
         BidAmount = bidAmount;
         CreatedAt = createdAt;
-        Lot = lotDto;
+        Item = item;
     }
 }
