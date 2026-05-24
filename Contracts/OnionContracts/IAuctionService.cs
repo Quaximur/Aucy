@@ -4,10 +4,12 @@ namespace Aucy.Contracts.OnionContracts;
 
 public interface IAuctionService : IService<IAuctionService>
 {
-    UnaryResult<LotDto> CreateLot(CreateLotDto request);
-    UnaryResult<string> RemoveLot(RemoveLotDto request);
-    UnaryResult<BidDto> CreateBid(CreateBidDto request);
-    UnaryResult<LotDto> GetLotInfo(GetLotDto request);
-    UnaryResult<LotsDto> GetLots(GetLotsDto request);
-    UnaryResult<LotsDto> GetMyLots(GetUserLotsDto request);
+    public UnaryResult<LotDto> CreateLot(CreateLotDto request);
+    public UnaryResult<LotWithBidsDto> GetLot(GetLotDto request);
+    public UnaryResult<LotsDto> GetLots(GetLotsDto request);
+    public UnaryResult<LotsDto> GetOwnLots();
+    public UnaryResult<string> RemoveLot(RemoveLotDto request);
+    public UnaryResult<BidDto> CreateBid(CreateBidDto request);
+    public UnaryResult<BidsWithItemsDto> GetOwnBids();
+    public UnaryResult<string> RemoveBid(RemoveBidDto request);
 }

@@ -30,7 +30,7 @@ message Lot {
   string id = 1;
   string seller_id = 2;       
   Item item = 3;              
-  uint64 price = 4;     
+  int64 price = 4;     
   
   google.protobuf.Timestamp created_at = 5;
 }
@@ -39,14 +39,14 @@ message Bid {
   string id = 1;
   string lot_id = 2;
   string bidder_id = 3;
-  uint64 currency = 4;
+  int64 currency = 4;
   google.protobuf.Timestamp created_at = 5;
 }
 
 message CreateLotRequest {
   string seller_id = 1;
   string item_id = 2;
-  uint64 price = 3;
+  int64 price = 3;
 }
 
 message RemoveLotRequest {
@@ -57,7 +57,7 @@ message RemoveLotRequest {
 message CreateBidRequest {
   string lot_id = 1;
   string bidder_id = 2;
-  uint64 currency= 3;               
+  int64 currency= 3;               
 }
 
 message BuyoutLotRequest {
@@ -68,8 +68,8 @@ message BuyoutLotRequest {
 message GetLotsRequest {
   string item_type = 1;      
   string item_name = 2;      
-  uint32 page = 3;                 
-  uint32 page_size = 4;            
+  int32 page = 3;                 
+  int32 page_size = 4;            
 }
 
 message GetLotInfoRequest {
@@ -107,7 +107,7 @@ message GetLotsResponse {
   bool success = 1;
   string error_message = 2;
   repeated Lot lots = 3;
-  uint32 total_count = 4;           
+  int32 total_count = 4;           
 }
 
 message GetLotInfoResponse {

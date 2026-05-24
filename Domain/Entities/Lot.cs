@@ -2,11 +2,12 @@
 
 public class Lot
 {
-    public Guid Id { get; set; }
-    public Guid UserId { get; set; }
-    public Guid ItemId { get; set; }
-    public ulong Price { get; set; }
-    public required string ItemName { get; set; }
-    public required string ItemType { get; set; }
-    public DateTime CreatedAt { get; set; }
+	public Guid Id { get; set; }
+	public Guid OwnerUserId { get; set; }
+	public Guid ItemId { get; set; }
+	public Item? Item { get; set; }
+	public long ItemPrice { get; set; }
+	public int ItemAmount { get; set; }
+	public DateTime CreatedAt { get; set; }
+	public List<Bid>? Bids { get; set; }
 }
