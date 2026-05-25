@@ -10,7 +10,7 @@ using System.Security.Claims;
 
 namespace Aucy.Application;
 
-//[Authorize]
+[Authorize]
 public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 {
     private readonly AuctionDbContext _auctionDb;

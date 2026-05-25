@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/Solution Items/">
+    <File Path=".env" />
     <File Path=".gitignore" />
+    <File Path="docker-compose.yml" />
   </Folder>
   <Project Path="API/Aucy.API.csproj" />
   <Project Path="Application/Aucy.Application.csproj" Id="7cbd733c-e28d-4c07-a334-35c60d344ff9" />
