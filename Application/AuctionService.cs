@@ -1,5 +1,6 @@
 ﻿using Aucy.Contracts.OnionContracts;
 using Aucy.Data;
+using Aucy.Domain.Entities;
 using Grpc.Core;
 using MagicOnion;
 using MagicOnion.Server;
@@ -29,9 +30,47 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
         throw new NotImplementedException();
     }
 
-    public UnaryResult<LotDto> CreateLot(CreateLotDto request)
+    public async UnaryResult<LotDto> CreateLot(CreateLotDto request)
     {
-        throw new NotImplementedException();
+        var userId = Context.CallContext.GetHttpContext().User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userGuid = Guid.Parse(userId);
+
+        var itemConfigGuid = Guid.Parse(request.ItemConfig.Id);
+
+        // Find or create the ItemConfig
+        var itemConfig = await _auctionDb.ItemConfigs
+            .FindAsync(itemConfigGuid);
+
+        if (itemConfig == null)
+        {
+            itemConfig = new ItemConfig
+            {
+                Id = itemConfigGuid,
+                Definition = request.ItemConfig.Definition,
+                Name = request.ItemConfig.Name
+            };
+            await _auctionDb.ItemConfigs.AddAsync(itemConfig);
+        }
+
+        // Create the Lot
+        var lot = Lot.Create(ownerUserId: userGuid, 
+            itemConfigId: itemConfigGuid, 
+            itemConfig: itemConfig,
+            itemConfigPrice: request.ItemConfigPrice, 
+            itemConfigAmount: request.ItemConfigAmount);
+
+        await _auctionDb.Lots.AddAsync(lot);
+        await _auctionDb.SaveChangesAsync();
+
+        return new LotDto
+        (
+            id: lot.Id.ToString(),
+            ownerUserId: userId,
+            itemConfigId: request.ItemConfig.Id,
+            itemConfigPrice: lot.ItemConfigPrice,
+            itemConfigAmount: lot.ItemConfigAmount,
+            createdAt: lot.CreatedAt
+        );
     }
 
     public async UnaryResult<LotsWithItemConfigsDto> GetOwnLots()

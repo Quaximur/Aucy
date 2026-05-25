@@ -23,5 +23,5 @@ public class Bid
     /// Amount of items of the same config, which user wants to buy for the price specified in <see cref="BidPrice"/>.
     /// </summary>
     public int BidAmount { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
 }

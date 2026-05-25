@@ -14,6 +14,18 @@ public class Lot
     public ItemConfig? ItemConfig { get; set; } 
 	public long ItemConfigPrice { get; set; }
 	public int ItemConfigAmount { get; set; }
-	public DateTime CreatedAt { get; set; }
-	public List<Bid>? Bids { get; set; }
+	public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+	public static Lot Create(Guid ownerUserId, Guid itemConfigId, ItemConfig itemConfig, 
+        long itemConfigPrice, int itemConfigAmount)
+    {
+        return new Lot
+        {
+            OwnerUserId = ownerUserId,
+            ItemConfigId = itemConfigId,
+            ItemConfig = itemConfig,
+            ItemConfigPrice = itemConfigPrice,
+            ItemConfigAmount = itemConfigAmount,
+        };
+    }
 }
