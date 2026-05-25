@@ -13,9 +13,9 @@ namespace Aucy.Application;
 [Authorize]
 public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 {
-    private readonly AuctionDbContext _auctionDb;
+    private readonly AucyDbContext _auctionDb;
 
-    public AuctionService(AuctionDbContext auctionDbContext)
+    public AuctionService(AucyDbContext auctionDbContext)
     {
         _auctionDb = auctionDbContext;
     }

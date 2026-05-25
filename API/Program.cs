@@ -1,12 +1,14 @@
 using Aucy.Application;
+using Aucy.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Configuration.AddEnvironmentVariables();
+DotNetEnv.Env.Load();
 
 builder.Services.AddMagicOnion();
+builder.AddDataServices();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
