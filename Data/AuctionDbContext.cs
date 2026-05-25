@@ -3,13 +3,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Aucy.Data;
 
-public class AuctionContext : DbContext
+public class AuctionDbContext : DbContext
 {
     public DbSet<Lot> Lots { get; set; }
     public DbSet<Bid> Bids { get; set; }
     public DbSet<ItemConfig> ItemConfigs { get; set; }
 
-    public AuctionContext(DbContextOptions<AuctionContext> options) : base(options)
+    public AuctionDbContext(DbContextOptions<AuctionDbContext> options) : base(options)
     {
     }
 
