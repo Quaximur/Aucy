@@ -9,7 +9,9 @@ public class Lot
     /// <summary>
     /// The config of the item, which is being sold in this lot. 
     /// </summary>
-    public ItemConfig? ItemConfig { get; set; } // TODO: replace with ItemStack. Because lot has access to concrete item instances
+    // TODO: replace with ItemStack? Because lot has access to concrete item instances
+    // ItemConfig + ItemConfigAmount -> ItemStack (Does it has sense?)
+    public ItemConfig? ItemConfig { get; set; } 
 	public long ItemConfigPrice { get; set; }
 	public int ItemConfigAmount { get; set; }
 	public DateTime CreatedAt { get; set; }
