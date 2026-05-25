@@ -6,12 +6,12 @@ namespace Aucy.Application;
 
 public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 {
-    public UnaryResult<ItemWithLotsAndBidsDto> GetItem(GetItemDto request)
+    public UnaryResult<ItemConfigWithLotsAndBidsDto> GetItemConfig(GetItemConfigDto request)
     {
         throw new NotImplementedException();
     }
 
-    public UnaryResult<ItemsDto> GetItems(GetItemsDto request)
+    public UnaryResult<ItemConfigsDto> GetItemConfigs(GetItemConfigsDto request)
     {
         throw new NotImplementedException();
     }
@@ -21,7 +21,7 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
         throw new NotImplementedException();
     }
 
-    public UnaryResult<LotsWithItemsDto> GetOwnLots()
+    public UnaryResult<LotsWithItemConfigsDto> GetOwnLots()
     {
         throw new NotImplementedException();
     }
@@ -35,7 +35,7 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
         throw new NotImplementedException();
     }
 
-    public UnaryResult<BidsWithItemsDto> GetOwnBids()
+    public UnaryResult<BidsWithItemConfigsDto> GetOwnBids()
     {
         throw new NotImplementedException();
     }
