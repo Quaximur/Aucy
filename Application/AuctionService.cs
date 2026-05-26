@@ -32,8 +32,12 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 
     public async UnaryResult<LotDto> CreateLot(CreateLotDto request)
     {
-        var userId = Context.CallContext.GetHttpContext().User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var userGuid = Guid.Parse(userId);
+        //var userId = Context.CallContext.GetHttpContext().User.FindFirstValue(ClaimTypes.NameIdentifier);
+        //var userGuid = Guid.Parse(userId);
+        var userId = request.OwnerUserId;
+        var userGuid = Guid.Parse(request.OwnerUserId);
+
+        Console.WriteLine($"Creating lot request for user: {userId}");
 
         var itemConfigGuid = Guid.Parse(request.ItemConfig.Id);
 
@@ -49,18 +53,27 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
                 Definition = request.ItemConfig.Definition,
                 Name = request.ItemConfig.Name
             };
+
             await _auctionDb.ItemConfigs.AddAsync(itemConfig);
+
+            Console.WriteLine($"ItemConfig not found, created new one: {itemConfig.Id}, {itemConfig.Name}");
+        }
+        else
+        {
+            Console.WriteLine($"ItemConfig found: {itemConfig.Id}, {itemConfig.Name}");
         }
 
+
         // Create the Lot
-        var lot = Lot.Create(ownerUserId: userGuid, 
-            itemConfigId: itemConfigGuid, 
-            itemConfig: itemConfig,
-            itemConfigPrice: request.ItemConfigPrice, 
+        var lot = Lot.Create(ownerUserId: userGuid,
+            itemConfigId: itemConfig.Id,
+            itemConfigPrice: request.ItemConfigPrice,
             itemConfigAmount: request.ItemConfigAmount);
 
         await _auctionDb.Lots.AddAsync(lot);
         await _auctionDb.SaveChangesAsync();
+
+        Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfig.Id}");
 
         return new LotDto
         (

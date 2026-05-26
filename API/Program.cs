@@ -1,14 +1,25 @@
 using Aucy.Application;
 using Aucy.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
-DotNetEnv.Env.Load();
+DotNetEnv.Env.TraversePath().Load();
 
 builder.Services.AddMagicOnion();
 builder.AddDataServices();
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Listen(IPAddress.Any, 8765, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http2;
+    });
+});
 
 //builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 //    .AddJwtBearer(options =>
@@ -57,6 +68,18 @@ builder.AddDataServices();
 //builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    //app.UseSwagger();
+    //app.UseSwaggerUI();
+
+    using IServiceScope s = app.Services.CreateScope();
+
+    using AucyDbContext ctx = s.ServiceProvider.GetRequiredService<AucyDbContext>();
+
+    ctx.Database.Migrate();
+}
 
 app.UseHttpsRedirection();
 

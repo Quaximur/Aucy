@@ -20,33 +20,26 @@ public class AucyDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
+        // Lot configuration
         builder.Entity<Lot>()
             .HasKey(x => x.Id);
 
         builder.Entity<Lot>()
             .HasOne(x => x.ItemConfig)
-            .WithMany()
+            .WithMany(x => x.Lots)
             .HasForeignKey(x => x.ItemConfigId);
 
+        // Bid configuration
         builder.Entity<Bid>()
             .HasKey(x => x.Id);
 
         builder.Entity<Bid>()
             .HasOne(x => x.ItemConfig)
-            .WithMany()
+            .WithMany(x => x.Bids)
             .HasForeignKey(x => x.ItemConfigId);
 
+        // ItemConfig configuration
         builder.Entity<ItemConfig>()
             .HasKey(x => x.Id);
-
-        builder.Entity<ItemConfig>()
-            .HasMany(x => x.Lots)
-            .WithOne()
-            .HasForeignKey(x => x.Id);
-
-        builder.Entity<ItemConfig>()
-            .HasMany(x => x.Bids)
-            .WithOne()
-            .HasForeignKey(x => x.Id);
     }
 }

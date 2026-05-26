@@ -10,7 +10,7 @@ public static class DI
     public static void AddDataServices(this IHostApplicationBuilder builder)
     {
         var connectionString =
-           Environment.GetEnvironmentVariable("ConnectionStrings__LootDbContext")
+           Environment.GetEnvironmentVariable("ConnectionStrings__AucyDbContext")
            ?? builder.Configuration.GetConnectionString("AucyDbContext");
 
         builder.Services.AddDbContext<AucyDbContext>(options =>

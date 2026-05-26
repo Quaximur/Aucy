@@ -25,6 +25,7 @@ namespace Aucy.Data.Migrations
             modelBuilder.Entity("Aucy.Domain.Entities.Bid", b =>
                 {
                     b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<int>("BidAmount")
@@ -71,6 +72,7 @@ namespace Aucy.Data.Migrations
             modelBuilder.Entity("Aucy.Domain.Entities.Lot", b =>
                 {
                     b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -97,14 +99,8 @@ namespace Aucy.Data.Migrations
 
             modelBuilder.Entity("Aucy.Domain.Entities.Bid", b =>
                 {
-                    b.HasOne("Aucy.Domain.Entities.ItemConfig", null)
-                        .WithMany("Bids")
-                        .HasForeignKey("Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Aucy.Domain.Entities.ItemConfig", "ItemConfig")
-                        .WithMany()
+                        .WithMany("Bids")
                         .HasForeignKey("ItemConfigId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -114,14 +110,8 @@ namespace Aucy.Data.Migrations
 
             modelBuilder.Entity("Aucy.Domain.Entities.Lot", b =>
                 {
-                    b.HasOne("Aucy.Domain.Entities.ItemConfig", null)
-                        .WithMany("Lots")
-                        .HasForeignKey("Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Aucy.Domain.Entities.ItemConfig", "ItemConfig")
-                        .WithMany()
+                        .WithMany("Lots")
                         .HasForeignKey("ItemConfigId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

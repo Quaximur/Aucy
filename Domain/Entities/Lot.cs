@@ -14,16 +14,30 @@ public class Lot
     public ItemConfig? ItemConfig { get; set; } 
 	public long ItemConfigPrice { get; set; }
 	public int ItemConfigAmount { get; set; }
-	public DateTime CreatedAt { get; set; } = DateTime.Now;
+	public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-	public static Lot Create(Guid ownerUserId, Guid itemConfigId, ItemConfig itemConfig, 
+	public static Lot Create(Guid ownerUserId, ItemConfig itemConfig, 
         long itemConfigPrice, int itemConfigAmount)
     {
         return new Lot
         {
+            Id = Guid.NewGuid(),
+            OwnerUserId = ownerUserId,
+            ItemConfigId = itemConfig.Id,
+            ItemConfig = itemConfig,
+            ItemConfigPrice = itemConfigPrice,
+            ItemConfigAmount = itemConfigAmount,
+        };
+    }
+
+    public static Lot Create(Guid ownerUserId, Guid itemConfigId,
+        long itemConfigPrice, int itemConfigAmount)
+    {
+        return new Lot
+        {
+            Id = Guid.NewGuid(),
             OwnerUserId = ownerUserId,
             ItemConfigId = itemConfigId,
-            ItemConfig = itemConfig,
             ItemConfigPrice = itemConfigPrice,
             ItemConfigAmount = itemConfigAmount,
         };

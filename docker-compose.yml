@@ -3,13 +3,13 @@ services:
         container_name: postgres
         image: postgres:17
         environment: 
-            POSTGRES_DB: "${POSTGRES_DB:-aucy_db}"
+            POSTGRES_DB: "${POSTGRES_DB:-aucy_dev_db}"
             POSTGRES_USER: "${POSTGRES_USER:-postgres}"
             POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-111}"
         volumes:
             - postgres-data:/var/lib/postgresql/data
         ports:
-            - "${POSTGRES_PORT:-6767}:5432"
+            - "${POSTGRES_PORT:-6768}:5432"
         restart: unless-stopped
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U postgres"]

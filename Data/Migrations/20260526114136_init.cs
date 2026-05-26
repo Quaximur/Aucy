@@ -39,12 +39,6 @@ namespace Aucy.Data.Migrations
                 {
                     table.PrimaryKey("PK_Bids", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Bids_ItemConfigs_Id",
-                        column: x => x.Id,
-                        principalTable: "ItemConfigs",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
                         name: "FK_Bids_ItemConfigs_ItemConfigId",
                         column: x => x.ItemConfigId,
                         principalTable: "ItemConfigs",
@@ -66,12 +60,6 @@ namespace Aucy.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Lots", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Lots_ItemConfigs_Id",
-                        column: x => x.Id,
-                        principalTable: "ItemConfigs",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_Lots_ItemConfigs_ItemConfigId",
                         column: x => x.ItemConfigId,
