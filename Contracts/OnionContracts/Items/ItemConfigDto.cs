@@ -1,18 +1,19 @@
 ﻿using MessagePack;
 
-namespace Aucy.Contracts.OnionContracts;
-
-[MessagePackObject]
-public class ItemConfigDto
+namespace Aucy.Contracts.OnionContracts
 {
-    [Key(0)] public string Id { get; set; }
-    [Key(1)] public string Definition { get; set; }
-    [Key(2)] public string Name { get; set; }
-
-    public ItemConfigDto(string id, string definition, string name)
+    [MessagePackObject]
+    public class ItemConfigDto
     {
-        Id = id;
-        Definition = definition;
-        Name = name;
+        [Key(0)] public string Id { get; set; }
+        [Key(1)] public string Definition { get; set; }
+        [Key(2)] public string Name { get; set; }
+
+        public ItemConfigDto(string id, string definition, string name)
+        {
+            Id = id;
+            Definition = definition;
+            Name = name;
+        }
     }
 }

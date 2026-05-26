@@ -1,14 +1,15 @@
 ﻿using MessagePack;
 
-namespace Aucy.Contracts.OnionContracts;
-
-[MessagePackObject]
-public class GetItemConfigDto
+namespace Aucy.Contracts.OnionContracts
 {
-    [Key(0)] public string ItemConfigId { get; set; }
-
-    public GetItemConfigDto(string itemConfigId)
+    [MessagePackObject]
+    public class GetItemConfigDto
     {
-        ItemConfigId = itemConfigId;
+        [Key(0)] public string ItemConfigId { get; set; }
+
+        public GetItemConfigDto(string itemConfigId)
+        {
+            ItemConfigId = itemConfigId;
+        }
     }
 }

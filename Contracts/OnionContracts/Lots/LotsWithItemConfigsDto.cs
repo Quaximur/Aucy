@@ -1,14 +1,15 @@
 ﻿using MessagePack;
 
-namespace Aucy.Contracts.OnionContracts;
-
-[MessagePackObject]
-public  class LotsWithItemConfigsDto
+namespace Aucy.Contracts.OnionContracts
 {
-    [Key(0)] public List<LotWithItemConfigDto> Lots { get; set; }
-
-    public LotsWithItemConfigsDto(List<LotWithItemConfigDto> lots)
+    [MessagePackObject]
+    public  class LotsWithItemConfigsDto
     {
-        Lots = lots;
+        [Key(0)] public List<LotWithItemConfigDto> Lots { get; set; }
+
+        public LotsWithItemConfigsDto(List<LotWithItemConfigDto> lots)
+        {
+            Lots = lots;
+        }
     }
 }

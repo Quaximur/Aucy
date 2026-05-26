@@ -1,14 +1,15 @@
 ﻿using MessagePack;
 
-namespace Aucy.Contracts.OnionContracts;
-
-[MessagePackObject]
-public class RemoveBidDto
+namespace Aucy.Contracts.OnionContracts
 {
-    [Key(0)] public string BidId { get; set; }
-
-    public RemoveBidDto(string bidId)
+    [MessagePackObject]
+    public class RemoveBidDto
     {
-        BidId = bidId;
+        [Key(0)] public string BidId { get; set; }
+
+        public RemoveBidDto(string bidId)
+        {
+            BidId = bidId;
+        }
     }
 }

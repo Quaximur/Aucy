@@ -1,20 +1,21 @@
 ﻿using MessagePack;
 
-namespace Aucy.Contracts.OnionContracts;
-
-[MessagePackObject]
-public class CreateLotDto
+namespace Aucy.Contracts.OnionContracts
 {
-    [Key(0)] public string OwnerUserId { get; set; }
-    [Key(1)] public ItemConfigDto ItemConfig { get; set; }
-    [Key(2)] public long ItemConfigPrice { get; set; }
-    [Key(3)] public int ItemConfigAmount { get; set; }
-
-    public CreateLotDto(string ownerUserId, ItemConfigDto itemConfig, long itemConfigPrice, int itemConfigAmount)
+    [MessagePackObject]
+    public class CreateLotDto
     {
-        OwnerUserId = ownerUserId;
-        ItemConfig = itemConfig;
-        ItemConfigPrice = itemConfigPrice;
-        ItemConfigAmount = itemConfigAmount;
+        [Key(0)] public string OwnerUserId { get; set; }
+        [Key(1)] public ItemConfigDto ItemConfig { get; set; }
+        [Key(2)] public long ItemConfigPrice { get; set; }
+        [Key(3)] public int ItemConfigAmount { get; set; }
+
+        public CreateLotDto(string ownerUserId, ItemConfigDto itemConfig, long itemConfigPrice, int itemConfigAmount)
+        {
+            OwnerUserId = ownerUserId;
+            ItemConfig = itemConfig;
+            ItemConfigPrice = itemConfigPrice;
+            ItemConfigAmount = itemConfigAmount;
+        }
     }
 }
