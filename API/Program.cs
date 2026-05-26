@@ -10,58 +10,58 @@ DotNetEnv.Env.Load();
 builder.Services.AddMagicOnion();
 builder.AddDataServices();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            // TODO: Add validation
-            NameClaimType = "user_id"
-        };
+//builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+//    .AddJwtBearer(options =>
+//    {
+//        options.TokenValidationParameters = new TokenValidationParameters
+//        {
+//            // TODO: Add validation
+//            NameClaimType = "user_id"
+//        };
 
-        options.Events = new JwtBearerEvents
-        {
-            OnTokenValidated = context =>
-            {
-                var userId = context.Principal?.FindFirst("user_id")?.Value;
+//        options.Events = new JwtBearerEvents
+//        {
+//            OnTokenValidated = context =>
+//            {
+//                var userId = context.Principal?.FindFirst("user_id")?.Value;
 
-                if (string.IsNullOrEmpty(userId))
-                {
-                    context.Fail("Token must contain 'user_id' claim");
-                    return Task.CompletedTask;
-                }
+//                if (string.IsNullOrEmpty(userId))
+//                {
+//                    context.Fail("Token must contain 'user_id' claim");
+//                    return Task.CompletedTask;
+//                }
 
-                if (!Guid.TryParse(userId, out _))
-                {
-                    context.Fail("Invalid user_id format");
-                    return Task.CompletedTask;
-                }
+//                if (!Guid.TryParse(userId, out _))
+//                {
+//                    context.Fail("Invalid user_id format");
+//                    return Task.CompletedTask;
+//                }
 
-                context.HttpContext.Items["UserId"] = userId;
+//                context.HttpContext.Items["UserId"] = userId;
 
-                return Task.CompletedTask;
-            },
+//                return Task.CompletedTask;
+//            },
 
-            OnChallenge = context =>
-            {
-                context.HandleResponse();
-                context.Response.StatusCode = 401;
-                context.Response.ContentType = "application/json";
+//            OnChallenge = context =>
+//            {
+//                context.HandleResponse();
+//                context.Response.StatusCode = 401;
+//                context.Response.ContentType = "application/json";
 
-                return context.Response.WriteAsync(
-                    "{\"error\":\"Authentication required\",\"message\":\"Please provide a valid session token\"}");
-            }
-        };
-    });
+//                return context.Response.WriteAsync(
+//                    "{\"error\":\"Authentication required\",\"message\":\"Please provide a valid session token\"}");
+//            }
+//        };
+//    });
 
-builder.Services.AddAuthorization();
+//builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
 app.UseHttpsRedirection();
 
-app.UseAuthentication();
-app.UseAuthorization();
+//app.UseAuthentication();
+//app.UseAuthorization();
 
 app.MapMagicOnionService<AuctionService>();
 
