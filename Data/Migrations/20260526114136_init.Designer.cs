@@ -81,13 +81,13 @@ namespace Aucy.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ItemConfigAmount")
+                    b.Property<int>("ItemQuantity")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("ItemConfigId")
                         .HasColumnType("uuid");
 
-                    b.Property<long>("ItemConfigPrice")
+                    b.Property<long>("UnitPrice")
                         .HasColumnType("bigint");
 
                     b.Property<Guid>("OwnerUserId")

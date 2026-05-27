@@ -10,7 +10,7 @@ using System.Security.Claims;
 
 namespace Aucy.Application;
 
-//[Authorize]
+[Authorize]
 public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 {
     private readonly AucyDbContext _auctionDb;
@@ -67,8 +67,8 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
         // Create the Lot
         var lot = Lot.Create(ownerUserId: userGuid,
             itemConfigId: itemConfig.Id,
-            itemConfigPrice: request.ItemConfigPrice,
-            itemConfigAmount: request.ItemConfigAmount);
+            unitPrice: request.UnitPrice,
+            itemQuantity: request.ItemQuantity);
 
         await _auctionDb.Lots.AddAsync(lot);
         await _auctionDb.SaveChangesAsync();
@@ -80,8 +80,8 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
             id: lot.Id.ToString(),
             ownerUserId: userId,
             itemConfigId: request.ItemConfig.Id,
-            itemConfigPrice: lot.ItemConfigPrice,
-            itemConfigAmount: lot.ItemConfigAmount,
+            unitPrice: lot.UnitPrice,
+            itemQuantity: lot.ItemQuantity,
             createdAt: lot.CreatedAt
         );
     }
@@ -98,8 +98,8 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
             (
                 id: l.Id.ToString(),
                 ownerUserId: userId,
-                itemConfigPrice: l.ItemConfigPrice,
-                itemConfigAmount: l.ItemConfigAmount,
+                unitPrice: l.UnitPrice,
+                itemQuantity: l.ItemQuantity,
                 createdAt: l.CreatedAt,
                 itemConfig: new ItemConfigDto
                 (

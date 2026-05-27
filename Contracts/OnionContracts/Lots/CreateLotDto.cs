@@ -7,15 +7,15 @@ namespace Aucy.Contracts.OnionContracts
     {
         [Key(0)] public string OwnerUserId { get; set; }
         [Key(1)] public ItemConfigDto ItemConfig { get; set; }
-        [Key(2)] public long ItemConfigPrice { get; set; }
-        [Key(3)] public int ItemConfigAmount { get; set; }
+        [Key(2)] public long UnitPrice { get; set; }
+        [Key(3)] public int ItemQuantity { get; set; }
 
-        public CreateLotDto(string ownerUserId, ItemConfigDto itemConfig, long itemConfigPrice, int itemConfigAmount)
+        public CreateLotDto(string ownerUserId, ItemConfigDto itemConfig, long unitPrice, int itemQuantity)
         {
             OwnerUserId = ownerUserId;
             ItemConfig = itemConfig;
-            ItemConfigPrice = itemConfigPrice;
-            ItemConfigAmount = itemConfigAmount;
+            UnitPrice = unitPrice;
+            ItemQuantity = itemQuantity;
         }
     }
 }

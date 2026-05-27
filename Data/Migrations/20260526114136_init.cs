@@ -53,8 +53,8 @@ namespace Aucy.Data.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     OwnerUserId = table.Column<Guid>(type: "uuid", nullable: false),
                     ItemConfigId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ItemConfigPrice = table.Column<long>(type: "bigint", nullable: false),
-                    ItemConfigAmount = table.Column<int>(type: "integer", nullable: false),
+                    UnitPrice = table.Column<long>(type: "bigint", nullable: false),
+                    ItemQuantity = table.Column<int>(type: "integer", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>

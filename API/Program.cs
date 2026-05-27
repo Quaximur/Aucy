@@ -1,90 +1,59 @@
+using Aucy.API.Extensions;
 using Aucy.Application;
+using Aucy.Application.Auth;
 using Aucy.Data;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
+var services = builder.Services;
 
 DotNetEnv.Env.TraversePath().Load();
-
-builder.Services.AddMagicOnion();
-builder.AddDataServices();
 
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.Listen(IPAddress.Any, 8765, listenOptions =>
     {
-        listenOptions.Protocols = HttpProtocols.Http2;
+        listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
     });
 });
 
-//builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-//    .AddJwtBearer(options =>
-//    {
-//        options.TokenValidationParameters = new TokenValidationParameters
-//        {
-//            // TODO: Add validation
-//            NameClaimType = "user_id"
-//        };
+builder.AddDataServices();
 
-//        options.Events = new JwtBearerEvents
-//        {
-//            OnTokenValidated = context =>
-//            {
-//                var userId = context.Principal?.FindFirst("user_id")?.Value;
+services.AddMagicOnion();
 
-//                if (string.IsNullOrEmpty(userId))
-//                {
-//                    context.Fail("Token must contain 'user_id' claim");
-//                    return Task.CompletedTask;
-//                }
+services.AddApiAuth();
 
-//                if (!Guid.TryParse(userId, out _))
-//                {
-//                    context.Fail("Invalid user_id format");
-//                    return Task.CompletedTask;
-//                }
-
-//                context.HttpContext.Items["UserId"] = userId;
-
-//                return Task.CompletedTask;
-//            },
-
-//            OnChallenge = context =>
-//            {
-//                context.HandleResponse();
-//                context.Response.StatusCode = 401;
-//                context.Response.ContentType = "application/json";
-
-//                return context.Response.WriteAsync(
-//                    "{\"error\":\"Authentication required\",\"message\":\"Please provide a valid session token\"}");
-//            }
-//        };
-//    });
-
-//builder.Services.AddAuthorization();
+if (builder.Environment.IsDevelopment())
+{
+    services.AddSwaggerGen();
+}
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    //app.UseSwagger();
-    //app.UseSwaggerUI();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 
-    using IServiceScope s = app.Services.CreateScope();
+    //using IServiceScope s = app.Services.CreateScope();
 
-    using AucyDbContext ctx = s.ServiceProvider.GetRequiredService<AucyDbContext>();
+    //using AucyDbContext ctx = s.ServiceProvider.GetRequiredService<AucyDbContext>();
 
-    ctx.Database.Migrate();
+    //ctx.Database.Migrate();
+
+    app.MapGroup("/dev").MapGet("/token/{userId}", (IJwtProvider jwtProvider, Guid userId) =>
+    {
+        return jwtProvider.GenerateToken(userId);
+    });
 }
 
 app.UseHttpsRedirection();
 
-//app.UseAuthentication();
-//app.UseAuthorization();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapMagicOnionService<AuctionService>();
 
