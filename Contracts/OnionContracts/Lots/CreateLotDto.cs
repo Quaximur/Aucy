@@ -5,7 +5,7 @@ namespace Aucy.Contracts.OnionContracts
     [MessagePackObject]
     public class CreateLotDto
     {
-        [Key(0)] public string OwnerUserId { get; set; }
+        [Key(0)] public string OwnerUserId { get; set; } // TODO: remove this and get user id from jwt
         [Key(1)] public ItemConfigDto ItemConfig { get; set; }
         [Key(2)] public long UnitPrice { get; set; }
         [Key(3)] public int ItemQuantity { get; set; }

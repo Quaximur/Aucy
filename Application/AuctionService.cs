@@ -32,10 +32,8 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 
     public async UnaryResult<LotDto> CreateLot(CreateLotDto request)
     {
-        //var userId = Context.CallContext.GetHttpContext().User.FindFirstValue(ClaimTypes.NameIdentifier);
-        //var userGuid = Guid.Parse(userId);
-        var userId = request.OwnerUserId;
-        var userGuid = Guid.Parse(request.OwnerUserId);
+        var userId = Context.CallContext.GetHttpContext().User.FindFirstValue("user_id");
+        var userGuid = Guid.Parse(userId);
 
         Console.WriteLine($"Creating lot request for user: {userId}");
 
@@ -88,7 +86,7 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 
     public async UnaryResult<LotsWithItemConfigsDto> GetOwnLots()
     {
-        var userId = Context.CallContext.GetHttpContext().User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId = Context.CallContext.GetHttpContext().User.FindFirstValue("user_id");
         var userGuid = Guid.Parse(userId);
 
         var lotsWithItemConfigs = await _auctionDb.Lots

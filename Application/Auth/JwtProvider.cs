@@ -20,7 +20,9 @@ public class JwtProvider(IOptions<JwtOptions> jwtoptions) : IJwtProvider
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtoptions.Secretkey)),
             SecurityAlgorithms.HmacSha256);
 
-        var token = new JwtSecurityToken(signingCredentials: credentials, claims: claims);
+        var token = new JwtSecurityToken(signingCredentials: credentials,
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(_jwtoptions.ExpireHours ?? 12));
 
         var tokenRaw = new JwtSecurityTokenHandler().WriteToken(token);
 

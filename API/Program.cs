@@ -2,7 +2,6 @@ using Aucy.API.Extensions;
 using Aucy.Application;
 using Aucy.Application.Auth;
 using Aucy.Data;
-using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
@@ -16,7 +15,7 @@ builder.WebHost.ConfigureKestrel(options =>
 {
     options.Listen(IPAddress.Any, 8765, listenOptions =>
     {
-        listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+        listenOptions.Protocols = HttpProtocols.Http2;
     });
 });
 
@@ -38,11 +37,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 
-    //using IServiceScope s = app.Services.CreateScope();
+    using IServiceScope s = app.Services.CreateScope();
 
-    //using AucyDbContext ctx = s.ServiceProvider.GetRequiredService<AucyDbContext>();
+    using AucyDbContext ctx = s.ServiceProvider.GetRequiredService<AucyDbContext>();
 
-    //ctx.Database.Migrate();
+    ctx.Database.Migrate();
 
     app.MapGroup("/dev").MapGet("/token/{userId}", (IJwtProvider jwtProvider, Guid userId) =>
     {
