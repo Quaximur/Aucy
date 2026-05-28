@@ -20,6 +20,6 @@ public class ItemConfig
     /// </summary>
     public required string Definition { get; set; }
     public required string Name { get; set; }
-    public List<Lot>? Lots { get; set; }
-    public List<Bid>? Bids { get; set; }
+    public List<Lot> Lots { get; set; } = [];
+    public List<Bid> Bids { get; set; } = [];
 }

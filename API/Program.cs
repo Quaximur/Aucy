@@ -27,15 +27,15 @@ services.AddApiAuth();
 
 if (builder.Environment.IsDevelopment())
 {
-    services.AddSwaggerGen();
+    //services.AddSwaggerGen();
 }
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    //app.UseSwagger();
+    //app.UseSwaggerUI();
 
     using IServiceScope s = app.Services.CreateScope();
 
