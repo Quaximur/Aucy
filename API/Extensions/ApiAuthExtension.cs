@@ -1,5 +1,6 @@
 ﻿using Aucy.Application.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Aucy.API.Extensions;
@@ -8,11 +9,13 @@ public static class ApiAuthExtension
 {
     public static void AddApiAuth(this IServiceCollection services)
     {
-        services.Configure<JwtOptions>(options =>
+        var jwtOptions = new JwtOptions
         {
-            options.Secretkey = Environment.GetEnvironmentVariable("JwtOptions__SecretKey")!;
-            options.ExpireHours = 12;
-        });
+            Secretkey = Environment.GetEnvironmentVariable("JwtOptions__SecretKey")!,
+            ExpireHours = 12
+        };
+
+        services.AddSingleton(Options.Create(jwtOptions));
 
         services.AddScoped<IJwtProvider, JwtProvider>();
 
@@ -23,7 +26,7 @@ public static class ApiAuthExtension
                 {
                     ValidateIssuer = false,
                     ValidateAudience = false,
-                    ValidateLifetime = false, // true
+                    ValidateLifetime = jwtOptions.ExpireHours.HasValue,
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(
                         System.Text.Encoding.UTF8.GetBytes(
