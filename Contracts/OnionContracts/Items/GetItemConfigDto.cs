@@ -5,9 +5,9 @@ namespace Aucy.Contracts.OnionContracts
     [MessagePackObject]
     public class GetItemConfigDto
     {
-        [Key(0)] public string ItemConfigId { get; set; }
+        [Key(0)] public Guid ItemConfigId { get; set; }
 
-        public GetItemConfigDto(string itemConfigId)
+        public GetItemConfigDto(Guid itemConfigId)
         {
             ItemConfigId = itemConfigId;
         }

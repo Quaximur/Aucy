@@ -16,7 +16,7 @@ namespace Aucy.Data.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Definition = table.Column<string>(type: "text", nullable: false),
+                    BaseType = table.Column<string>(type: "text", nullable: false),
                     Name = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>

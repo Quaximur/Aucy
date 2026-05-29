@@ -1,6 +1,7 @@
 using Aucy.API.Extensions;
 using Aucy.Application;
 using Aucy.Application.Auth;
+using Aucy.Application.Mappings;
 using Aucy.Data;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,12 @@ builder.AddDataServices();
 services.AddMagicOnion();
 
 services.AddApiAuth();
+
+services.AddAutoMapper(x =>
+{
+    x.AddProfile<ItemConfigMapping>();
+    x.AddProfile<LotMapping>();
+});
 
 if (builder.Environment.IsDevelopment())
 {

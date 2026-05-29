@@ -59,7 +59,7 @@ namespace Aucy.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Definition")
+                    b.Property<string>("BaseType")
                         .IsRequired()
                         .HasColumnType("text");
 

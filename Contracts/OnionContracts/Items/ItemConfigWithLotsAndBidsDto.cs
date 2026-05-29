@@ -3,19 +3,15 @@
 namespace Aucy.Contracts.OnionContracts
 {
     [MessagePackObject]
-    public class ItemConfigWithLotsAndBidsDto
+    public class ItemConfigWithLotsAndBidsDto : ItemConfigDto
     {
-        [Key(0)] public string Id { get; set; }
-        [Key(1)] public string Definition { get; set; }
-        [Key(2)] public string Name { get; set; }
-        [Key(3)] public List<LotDto> Lots { get; set; }
-        [Key(4)] public List<BidDto> Bids { get; set; }
+        [Key(9)] public List<LotDto> Lots { get; set; }
+        [Key(10)] public List<BidDto> Bids { get; set; }
 
-        public ItemConfigWithLotsAndBidsDto(string id, string definition, string name, List<LotDto> lots, List<BidDto> bids)
+        public ItemConfigWithLotsAndBidsDto(Guid id, string name, bool isUnary, string icon, int grade, int rarity,
+            string baseType, List<string> extra, string categoryPath, List<LotDto> lots, List<BidDto> bids)
+            : base(id, name, isUnary, icon, grade, rarity, baseType, extra, categoryPath)
         {
-            Id = id;
-            Definition = definition;
-            Name = name;
             Lots = lots;
             Bids = bids;
         }

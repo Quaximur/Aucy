@@ -12,14 +12,46 @@ public class ItemConfig
     /// It is unique for each config, but one ItemConfig.Id can belong to many itemConfig instances.
     /// </summary>
     public Guid Id { get; set; }
+    public required string Name { get; set; }
 
     /// <summary>
-    /// ItemConfig type definition. Example: "golden_axe", "wheat", "iron_ore". 
-    /// This field is used to determine which Definition to use for rendering itemConfig in the frontend 
-    /// and for other purposes. It should be unique for each itemConfig type.
+    /// Should item be presented in stack? If it is unary it always has mo more than 1 lot and can be buyout without bids.
     /// </summary>
-    public required string Definition { get; set; }
-    public required string Name { get; set; }
+    public bool IsUnary { get; set; }
+    public string? Icon { get; set; }
+    public int? Grade { get; set; }
+    public int? Rarity { get; set; }
+
+    /// <summary>
+    /// ItemConfig type baseType. Example: "golden_axe", "wheat", "iron_ore". 
+    /// This field is used to determine which BaseType to use for rendering itemConfig in the frontend 
+    /// and for other purposes.
+    /// </summary>
+    public required string BaseType { get; set; }
+
+    /// <summary>
+    /// Stats, modifiers, marks, curses, or any other properties that could differ based on domain.
+    /// </summary>
+    public List<string> Extra { get; set; } = [];
+    public required string CategoryPath { get; set; }
+
     public List<Lot> Lots { get; set; } = [];
     public List<Bid> Bids { get; set; } = [];
+
+    public static ItemConfig Create(Guid id, string name, bool isUnary, string? icon, int? grade, int? rarity,
+        string baseType, List<string> extra, string categoryPath)
+    {
+        return new ItemConfig
+        {
+            Id = id,
+            Name = name,
+            IsUnary = isUnary,
+            Icon = icon,
+            Grade = grade,
+            Rarity = rarity,
+            BaseType = baseType,
+            Extra = extra,
+            CategoryPath = categoryPath
+        };
+    }
 }

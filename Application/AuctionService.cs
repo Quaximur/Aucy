@@ -1,6 +1,7 @@
 ﻿using Aucy.Contracts.OnionContracts;
 using Aucy.Data;
 using Aucy.Domain.Entities;
+using AutoMapper;
 using Grpc.Core;
 using MagicOnion;
 using MagicOnion.Server;
@@ -11,14 +12,11 @@ using System.Security.Claims;
 namespace Aucy.Application;
 
 [Authorize]
-public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
+public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) : 
+    ServiceBase<IAuctionService>, IAuctionService
 {
-    private readonly AucyDbContext _aucyDb;
-
-    public AuctionService(AucyDbContext auctionDbContext)
-    {
-        _aucyDb = auctionDbContext;
-    }
+    private readonly AucyDbContext _aucyDb = auctionDbContext;
+    private readonly IMapper _mapper = mapper;
 
     public UnaryResult<ItemConfigWithLotsAndBidsDto> GetItemConfig(GetItemConfigDto request)
     {
@@ -37,8 +35,9 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 
         var query = _aucyDb.ItemConfigs.AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(request.DefinitionFilter))
-            query = query.Where(x => x.Definition.Contains(request.DefinitionFilter, StringComparison.OrdinalIgnoreCase));
+        // TODO: process path filter correctly (e.g. with splitting by '>' and checking each part separately, or with regex)
+        if (!string.IsNullOrWhiteSpace(request.CategoryPathFilter))
+            query = query.Where(x => x.CategoryPath.Contains(request.CategoryPathFilter, StringComparison.OrdinalIgnoreCase));
 
         if (!string.IsNullOrWhiteSpace(request.NameFilter))
             query = query.Where(x => x.Name.Contains(request.NameFilter, StringComparison.OrdinalIgnoreCase));
@@ -46,19 +45,24 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
         var itemConfigsList = await query
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
-            .Select(x => new ItemConfigDto(id: x.Id.ToString(), definition: x.Definition, name: x.Name))
+            .Select(x => _mapper.Map<ItemConfigDto>(x))
             .ToListAsync();
+
+        // TODO: discard unique items without lots
+        // TODO: separate items with the same id but different grades (will id change with grade? or make combined PK with baseType).
 
         return new ItemConfigsDto(itemConfigsList);
     }
 
     public async UnaryResult<LotDto> CreateLot(CreateLotDto request)
     {
-        var (userIdText, userGuid) = GetUserIdFromContext();
+        var userId = GetUserIdFromContext();
 
-        Console.WriteLine($"Creating lot request for user: {userIdText}");
+        Console.WriteLine($"Creating lot request for user: {userId}");
 
-        var itemConfigGuid = Guid.Parse(request.ItemConfig.Id);
+        var itemConfigGuid = request.ItemConfig.Id;
+
+        // TODO: check that user doesnt`t have a lot with specified itemConfig
 
         // Find or create the ItemConfig
         var itemConfig = await _aucyDb.ItemConfigs
@@ -66,12 +70,7 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
 
         if (itemConfig == null)
         {
-            itemConfig = new ItemConfig
-            {
-                Id = itemConfigGuid,
-                Definition = request.ItemConfig.Definition,
-                Name = request.ItemConfig.Name
-            };
+            itemConfig = _mapper.Map<ItemConfig>(request.ItemConfig);
 
             await _aucyDb.ItemConfigs.AddAsync(itemConfig);
 
@@ -82,9 +81,7 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
             Console.WriteLine($"ItemConfig found: {itemConfig.Id}, {itemConfig.Name}");
         }
 
-
-        // Create the Lot
-        var lot = Lot.Create(ownerUserId: userGuid,
+        var lot = Lot.Create(ownerUserId: userId,
             itemConfigId: itemConfig.Id,
             unitPrice: request.UnitPrice,
             itemQuantity: request.ItemQuantity);
@@ -92,43 +89,22 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
         await _aucyDb.Lots.AddAsync(lot);
         await _aucyDb.SaveChangesAsync();
 
-        Console.WriteLine($"Created lot: {lot.Id} for user: {userIdText} with itemConfig: {itemConfig.Id}");
+        Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfig.Id}");
 
-        return new LotDto
-        (
-            id: lot.Id.ToString(),
-            ownerUserId: userIdText,
-            itemConfigId: request.ItemConfig.Id,
-            unitPrice: lot.UnitPrice,
-            itemQuantity: lot.ItemQuantity,
-            createdAt: lot.CreatedAt
-        );
+        return _mapper.Map<LotDto>(lot);
     }
 
     public async UnaryResult<LotsWithItemConfigsDto> GetOwnLots()
     {
-        var (userIdText, userGuid) = GetUserIdFromContext();
+        var userId = GetUserIdFromContext();
 
         var lotsWithItemConfigs = await _aucyDb.Lots
-            .Where(l => l.OwnerUserId == userGuid)
+            .Where(l => l.OwnerUserId == userId)
             .Include(l => l.ItemConfig)
-            .Select(l => new LotWithItemConfigDto
-            (
-                id: l.Id.ToString(),
-                ownerUserId: userIdText,
-                unitPrice: l.UnitPrice,
-                itemQuantity: l.ItemQuantity,
-                createdAt: l.CreatedAt,
-                itemConfig: new ItemConfigDto
-                (
-                    id: l.ItemConfig!.Id.ToString(),
-                    definition: l.ItemConfig.Definition,
-                    name: l.ItemConfig.Name
-                )
-            ))
+            .Select(l => _mapper.Map<LotWithItemConfigDto>(l))
             .ToListAsync();
 
-        return new LotsWithItemConfigsDto(lotsWithItemConfigs ?? []);
+        return new LotsWithItemConfigsDto(lotsWithItemConfigs);
     }
 
     public UnaryResult<string> RemoveLot(RemoveLotDto request)
@@ -151,16 +127,16 @@ public class AuctionService : ServiceBase<IAuctionService>, IAuctionService
         throw new NotImplementedException();
     }
 
-    private (string userIdText, Guid userGuid) GetUserIdFromContext()
+    private Guid GetUserIdFromContext()
     {
         var userIdText = Context.CallContext.GetHttpContext()?.User.FindFirstValue("user_id");
 
-        if (string.IsNullOrEmpty(userIdText))
-            throw new RpcException(new Status(StatusCode.PermissionDenied, "token is not valid"));
+        if (string.IsNullOrWhiteSpace(userIdText))
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Token is not valid"));
 
         if (!Guid.TryParse(userIdText, out var userGuid))
-            throw new RpcException(new Status(StatusCode.PermissionDenied, "token is not valid"));
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Token is not valid"));
 
-        return (userIdText, userGuid);
+        return userGuid;
     }
 }
