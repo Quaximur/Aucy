@@ -50,7 +50,7 @@ public class ItemConfig
             Grade = grade,
             Rarity = rarity,
             BaseType = baseType,
-            Extra = extra,
+            Extra = extra ?? [],
             CategoryPath = categoryPath
         };
     }

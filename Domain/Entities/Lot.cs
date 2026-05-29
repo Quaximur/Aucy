@@ -30,6 +30,7 @@ public class Lot
             ItemConfig = itemConfig,
             UnitPrice = unitPrice,
             TotalQuantity = totalQuantity,
+            RemainingQuantity = totalQuantity
         };
     }
 
@@ -43,6 +44,7 @@ public class Lot
             ItemConfigId = itemConfigId,
             UnitPrice = unitPrice,
             TotalQuantity = totalQuantity,
+            RemainingQuantity= totalQuantity
         };
     }
 }
