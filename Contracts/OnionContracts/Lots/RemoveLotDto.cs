@@ -1,4 +1,5 @@
 ﻿using MessagePack;
+using System;
 
 namespace Aucy.Contracts.OnionContracts
 {

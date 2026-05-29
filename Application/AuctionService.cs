@@ -12,7 +12,7 @@ using System.Security.Claims;
 namespace Aucy.Application;
 
 [Authorize]
-public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) : 
+public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) :
     ServiceBase<IAuctionService>, IAuctionService
 {
     private readonly AucyDbContext _aucyDb = auctionDbContext;
@@ -36,6 +36,7 @@ public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) :
         var query = _aucyDb.ItemConfigs.AsQueryable();
 
         // TODO: process path filter correctly (e.g. with splitting by '>' and checking each part separately, or with regex)
+        // CAUTION: with substring filter, "Weapon>Sword" will also match "Weapon>SwordAndShield", which may not be desired
         if (!string.IsNullOrWhiteSpace(request.CategoryPathFilter))
             query = query.Where(x => x.CategoryPath.Contains(request.CategoryPathFilter, StringComparison.OrdinalIgnoreCase));
 
@@ -43,13 +44,11 @@ public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) :
             query = query.Where(x => x.Name.Contains(request.NameFilter, StringComparison.OrdinalIgnoreCase));
 
         var itemConfigsList = await query
+            .Where(x => !x.IsUnary || x.Lots.Any()) // No zombie configs
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .Select(x => _mapper.Map<ItemConfigDto>(x))
             .ToListAsync();
-
-        // TODO: discard unique items without lots
-        // TODO: separate items with the same id but different grades (will id change with grade? or make combined PK with baseType).
 
         return new ItemConfigsDto(itemConfigsList);
     }
@@ -62,9 +61,12 @@ public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) :
 
         var itemConfigGuid = request.ItemConfig.Id;
 
-        // TODO: check that user doesnt`t have a lot with specified itemConfig
+        var lotExists = await _aucyDb.Lots.AnyAsync(l => l.OwnerUserId == userId && l.ItemConfigId == itemConfigGuid);
+        if (lotExists )
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "You already have a lot with this item"));
 
         // Find or create the ItemConfig
+        // Mostly used for Unary items
         var itemConfig = await _aucyDb.ItemConfigs
             .FindAsync(itemConfigGuid);
 
@@ -84,7 +86,7 @@ public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) :
         var lot = Lot.Create(ownerUserId: userId,
             itemConfigId: itemConfig.Id,
             unitPrice: request.UnitPrice,
-            itemQuantity: request.ItemQuantity);
+            totalQuantity: request.TotalQuantity);
 
         await _aucyDb.Lots.AddAsync(lot);
         await _aucyDb.SaveChangesAsync();
@@ -94,20 +96,20 @@ public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) :
         return _mapper.Map<LotDto>(lot);
     }
 
-    public async UnaryResult<LotsWithItemConfigsDto> GetOwnLots()
+    public async UnaryResult<OwnLotsDto> GetOwnLots()
     {
         var userId = GetUserIdFromContext();
 
         var lotsWithItemConfigs = await _aucyDb.Lots
             .Where(l => l.OwnerUserId == userId)
             .Include(l => l.ItemConfig)
-            .Select(l => _mapper.Map<LotWithItemConfigDto>(l))
+            .Select(l => _mapper.Map<OwnLotDto>(l))
             .ToListAsync();
 
-        return new LotsWithItemConfigsDto(lotsWithItemConfigs);
+        return new OwnLotsDto(lotsWithItemConfigs);
     }
 
-    public UnaryResult<string> RemoveLot(RemoveLotDto request)
+    public UnaryResult<Guid> RemoveLot(RemoveLotDto request)
     {
         throw new NotImplementedException();
     }
@@ -117,12 +119,12 @@ public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) :
         throw new NotImplementedException();
     }
 
-    public UnaryResult<BidsWithItemConfigsDto> GetOwnBids()
+    public UnaryResult<OwnBidsDto> GetOwnBids()
     {
         throw new NotImplementedException();
     }
 
-    public UnaryResult<string> RemoveBid(RemoveBidDto request)
+    public UnaryResult<Guid> RemoveBid(RemoveBidDto request)
     {
         throw new NotImplementedException();
     }

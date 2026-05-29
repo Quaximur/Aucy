@@ -1,4 +1,6 @@
 ﻿using MessagePack;
+using System;
+using System.Collections.Generic;
 
 namespace Aucy.Contracts.OnionContracts
 {
@@ -15,8 +17,15 @@ namespace Aucy.Contracts.OnionContracts
         [Key(7)] public List<string> Extra { get; set; }
         [Key(8)] public string CategoryPath { get; set; }
 
-        public ItemConfigDto(Guid id, string name, bool isUnary, string? icon, int? grade, int? rarity,
-            string baseType, List<string> extra, string categoryPath)
+        public ItemConfigDto(Guid id, 
+            string name, 
+            bool isUnary, 
+            string? icon, 
+            int? grade, 
+            int? rarity,
+            string baseType, 
+            List<string> extra, 
+            string categoryPath)
         {
             Id = id;
             Name = name;

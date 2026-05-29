@@ -1,25 +1,28 @@
 ﻿using MessagePack;
+using System;
 
 namespace Aucy.Contracts.OnionContracts
 {
-    [MessagePackObject]
+	/// <summary>
+	/// Presented in common list of user bids (no total/bought quantity - only remaining)
+	/// </summary>
+	/// TODO: mb redundant. Use simple array of structs (Bids and Lots) for displaying 
+	[MessagePackObject]
     public class BidDto
     {
         [Key(0)] public Guid Id { get; set; }
         [Key(1)] public Guid ItemConfigId { get; set; }
         [Key(2)] public Guid BidderUserId { get; set; }
         [Key(3)] public long BidPrice { get; set; }
-        [Key(4)] public int BidAmount { get; set; }
-        [Key(5)] public DateTime CreatedAt { get; set; }
+        [Key(4)] public int RemainingQuantity { get; set; }
 
-        public BidDto(Guid id, Guid itemConfigId, Guid bidderUserId, long bidPrice, int bidAmount, DateTime createdAt)
+        public BidDto(Guid id, Guid itemConfigId, Guid bidderUserId, long bidPrice, int remainingQuantity)
         {
             Id = id;
             ItemConfigId = itemConfigId;
             BidderUserId = bidderUserId;
             BidPrice = bidPrice;
-            BidAmount = bidAmount;
-            CreatedAt = createdAt;
+            RemainingQuantity = remainingQuantity;
         }
     }
 }

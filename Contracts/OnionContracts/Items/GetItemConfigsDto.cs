@@ -13,8 +13,13 @@ namespace Aucy.Contracts.OnionContracts
         [Key(5)] public int Page { get; set; }
         [Key(6)] public int PageSize { get; set; }
 
-        public GetItemConfigsDto(string categoryPathFilter, string nameFilter, int? rarity, 
-            int? minGrade, int? maxGrade, int page, int pageSize)
+        public GetItemConfigsDto(string categoryPathFilter, 
+            string nameFilter, 
+            int? rarity, 
+            int? minGrade, 
+            int? maxGrade, 
+            int page, 
+            int pageSize)
         {
             CategoryPathFilter = categoryPathFilter;
             NameFilter = nameFilter;

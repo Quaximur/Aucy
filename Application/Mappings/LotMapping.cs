@@ -14,17 +14,18 @@ public class LotMapping : Profile
                 ownerUserId: src.OwnerUserId,
                 itemConfigId: src.ItemConfigId,
                 unitPrice: src.UnitPrice,
-                itemQuantity: src.ItemQuantity,
-                createdAt: src.CreatedAt
+                remainingQuantity: src.RemainingQuantity
             ));
 
-        CreateMap<Lot, LotWithItemConfigDto>()
-            .ConstructUsing(src => new LotWithItemConfigDto(
+        // Use with .Include(l => l.ItemConfig) in EF Core query
+        CreateMap<Lot, OwnLotDto>()
+            .ConstructUsing(src => new OwnLotDto(
                 id: src.Id,
                 ownerUserId: src.OwnerUserId,
                 itemConfigId: src.ItemConfigId,
                 unitPrice: src.UnitPrice,
-                itemQuantity: src.ItemQuantity,
+                remainingQuantity: src.RemainingQuantity,
+                totalQuantity: src.TotalQuantity,
                 createdAt: src.CreatedAt,
                 itemConfig: null!
             ))
