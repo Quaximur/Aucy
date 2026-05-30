@@ -66,7 +66,8 @@ public class AuctionService(AucyDbContext aucyDbContext, IMapper mapper) : Servi
 
         Console.WriteLine($"Creating lot request for user: {userId}");
 
-        var itemConfigId = request.ItemConfig.Id;
+        var itemConfig = request.ItemConfig;
+        var itemConfigId = itemConfig.Id;
 
         //TODO: Transaction 
 
@@ -77,25 +78,44 @@ public class AuctionService(AucyDbContext aucyDbContext, IMapper mapper) : Servi
         // Check items existence and quantity in inventory
         var itemStack = await _aucyDb.ItemStacks
             .AsTracking()
-            .Include(x => x.Inventory)
             .FirstOrDefaultAsync(s => s.InventoryId == userId &&
                 s.ConfigId == itemConfigId &&
                 s.Quantity >= request.TotalQuantity) ?? throw new RpcException(new Status(StatusCode.InvalidArgument,
                 "You don't have enough items in your inventory"));
 
-        var inventory = itemStack.Inventory ?? throw new RpcException(new Status(StatusCode.NotFound, "Inventory not found"));
-
         // Reduce the quantity or remove the ItemStack
         var remainingQuantity = itemStack.Quantity - request.TotalQuantity;
+        var decreaseUsedCapacity = false;
 
         if (remainingQuantity > 0)
             itemStack.Quantity = remainingQuantity;
         else
         {
             _aucyDb.ItemStacks.Remove(itemStack);
-            inventory.UsedCapacity -= 1;
-            if (request.ItemConfig.Weight > 0)
-                inventory.UsedWeight -= request.ItemConfig.Weight * request.TotalQuantity;
+            decreaseUsedCapacity = true;
+        }
+
+        float totalWeightToRemove = 0;
+        var hasWeight = itemConfig.Weight > 0;
+
+        if (hasWeight)
+            totalWeightToRemove = itemConfig.Weight * request.TotalQuantity;
+
+        if (hasWeight || decreaseUsedCapacity)
+        {
+            var inventoryUpdateQuery = _aucyDb.Inventories
+                .Where(x => x.Id == userId);
+
+            if (hasWeight && !decreaseUsedCapacity)
+                await inventoryUpdateQuery.ExecuteUpdateAsync(x => x.SetProperty(i => i.UsedWeight, i => i.UsedWeight - totalWeightToRemove));
+            else if (!hasWeight)
+                await inventoryUpdateQuery.ExecuteUpdateAsync(x => x.SetProperty(i => i.UsedCapacity, i => i.UsedCapacity - 1));
+            else
+                await inventoryUpdateQuery.ExecuteUpdateAsync(x =>
+                {
+                    x.SetProperty(i => i.UsedWeight, i => i.UsedWeight - totalWeightToRemove);
+                    x.SetProperty(i => i.UsedCapacity, i => i.UsedCapacity - 1);
+                });
         }
 
         var lot = Lot.Create(ownerUserId: userId,

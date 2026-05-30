@@ -29,7 +29,7 @@ public class InventoryService(AucyDbContext aucyDbContext, IMapper mapper) : Ser
         // TODO: Transaction
 
         var inventory = await _aucyDb.Inventories
-            .FindAsync(userId) ?? throw new RpcException(new Status(StatusCode.NotFound,
+            .Where(x => x.Id == userId).FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
                 "Inventory doesn`t exist")); // Tracked by FindAsync
 
         // Find or create the ItemConfig
@@ -71,6 +71,8 @@ public class InventoryService(AucyDbContext aucyDbContext, IMapper mapper) : Ser
                 i.ConfigId == itemConfig.Id);
 
         Guid itemStackId;
+        var addUsedCapacity = false;
+
         if (itemStack != null) // If found, update the quantity
         {
             itemStackId = itemStack.Id;
@@ -93,8 +95,22 @@ public class InventoryService(AucyDbContext aucyDbContext, IMapper mapper) : Ser
         }
 
 
-        if (hasWeight)
-            inventory.UsedWeight += totalWeightToAdd;
+        if (hasWeight || addUsedCapacity)
+        {
+            var inventoryUpdateQuery = _aucyDb.Inventories
+                .Where(x => x.Id == userId);
+
+            if (hasWeight && !addUsedCapacity)
+                await inventoryUpdateQuery.ExecuteUpdateAsync(x => x.SetProperty(i => i.UsedWeight, i => i.UsedWeight + totalWeightToAdd));
+            else if (!hasWeight)
+                await inventoryUpdateQuery.ExecuteUpdateAsync(x => x.SetProperty(i => i.UsedCapacity, i => i.UsedCapacity + 1));
+            else
+                await inventoryUpdateQuery.ExecuteUpdateAsync(x =>
+                {
+                    x.SetProperty(i => i.UsedWeight, i => i.UsedWeight + totalWeightToAdd);
+                    x.SetProperty(i => i.UsedCapacity, i => i.UsedCapacity + 1);
+                });
+        }
 
         await _aucyDb.SaveChangesAsync();
 
