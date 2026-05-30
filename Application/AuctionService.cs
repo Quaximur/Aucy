@@ -77,18 +77,20 @@ public class AuctionService(AucyDbContext aucyDbContext, IMapper mapper) : Servi
 
         // Check items existence and quantity in inventory
         var itemStack = await _aucyDb.ItemStacks
-            .AsTracking()
             .FirstOrDefaultAsync(s => s.InventoryId == userId &&
                 s.ConfigId == itemConfigId &&
                 s.Quantity >= request.TotalQuantity) ?? throw new RpcException(new Status(StatusCode.InvalidArgument,
                 "You don't have enough items in your inventory"));
 
         // Reduce the quantity or remove the ItemStack
-        var remainingQuantity = itemStack.Quantity - request.TotalQuantity;
         var decreaseUsedCapacity = false;
 
-        if (remainingQuantity > 0)
-            itemStack.Quantity = remainingQuantity;
+        if (itemStack.Quantity > request.TotalQuantity)
+        {
+            await _aucyDb.ItemStacks
+                .Where(x => x.Id == itemStack.Id)
+                .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity - request.TotalQuantity));
+        }
         else
         {
             _aucyDb.ItemStacks.Remove(itemStack);
