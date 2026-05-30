@@ -30,7 +30,7 @@ public class InventoryService(AucyDbContext aucyDbContext, IMapper mapper) : Ser
 
         var inventory = await _aucyDb.Inventories
             .Where(x => x.Id == userId).FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
-                "Inventory doesn`t exist")); // Tracked by FindAsync
+                "Inventory doesn`t exist"));
 
         // Find or create the ItemConfig
         // Mostly used for Unary items
@@ -50,7 +50,7 @@ public class InventoryService(AucyDbContext aucyDbContext, IMapper mapper) : Ser
             Console.WriteLine($"ItemConfig found: {itemConfig.Id}, {itemConfig.Name}");
         }
 
-        if (inventory.UsedCapacity + request.Quantity >= inventory.Capacity)
+        if (inventory.UsedCapacity + request.Quantity > inventory.Capacity)
             throw new RpcException(new Status(StatusCode.ResourceExhausted, "Inventory capacity limit exceeded"));
 
         float totalWeightToAdd = 0;
@@ -90,8 +90,6 @@ public class InventoryService(AucyDbContext aucyDbContext, IMapper mapper) : Ser
             };
 
             await _aucyDb.ItemStacks.AddAsync(itemStack);
-
-            inventory.UsedCapacity += 1;
         }
 
 
