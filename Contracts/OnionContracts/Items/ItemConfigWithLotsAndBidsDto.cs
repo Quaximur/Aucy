@@ -13,7 +13,7 @@ namespace Aucy.Contracts.OnionContracts
         public ItemConfigWithLotsAndBidsDto(Guid id,
             string name,
             bool isUnary,
-            string? icon,
+            string icon,
             int? grade,
             int? rarity,
             string baseType,
