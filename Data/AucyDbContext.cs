@@ -49,6 +49,13 @@ public class AucyDbContext : DbContext
             .HasKey(x => x.Id);
 
         builder.Entity<ItemStack>()
+            .HasIndex(x => new // Should be grouped
+            {
+                x.ConfigId,
+                x.InventoryId
+            });
+
+        builder.Entity<ItemStack>()
             .HasOne(x => x.Config)
             .WithMany()
             .HasForeignKey(x => x.ConfigId);
