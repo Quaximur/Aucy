@@ -10,7 +10,7 @@ namespace Aucy.Contracts.OnionContracts
         [Key(0)] public Guid Id { get; set; }
         [Key(1)] public string Name { get; set; }
         [Key(2)] public bool IsUnary { get; set; }
-        [Key(3)] public string? Icon { get; set; }
+        [Key(3)] public string Icon { get; set; }
         [Key(4)] public int? Grade { get; set; }
         [Key(5)] public int? Rarity { get; set; }
         [Key(6)] public string BaseType { get; set; }
@@ -20,7 +20,7 @@ namespace Aucy.Contracts.OnionContracts
         public ItemConfigDto(Guid id, 
             string name, 
             bool isUnary, 
-            string? icon, 
+            string icon, 
             int? grade, 
             int? rarity,
             string baseType, 
