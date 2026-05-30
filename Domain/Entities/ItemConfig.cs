@@ -18,7 +18,7 @@ public class ItemConfig
     /// Should item be presented in stack? If it is unary it always has mo more than 1 lot and can be buyout without bids.
     /// </summary>
     public bool IsUnary { get; set; }
-    public string? Icon { get; set; }
+    public required string Icon { get; set; }
     public int? Grade { get; set; }
     public int? Rarity { get; set; }
 
@@ -38,8 +38,15 @@ public class ItemConfig
     public List<Lot> Lots { get; set; } = [];
     public List<Bid> Bids { get; set; } = [];
 
-    public static ItemConfig Create(Guid id, string name, bool isUnary, string? icon, int? grade, int? rarity,
-        string baseType, List<string> extra, string categoryPath)
+    public static ItemConfig Create(Guid id, 
+        string name, 
+        bool isUnary, 
+        string icon, 
+        int? grade, 
+        int? rarity,
+        string baseType, 
+        List<string> extra, 
+        string categoryPath)
     {
         return new ItemConfig
         {
