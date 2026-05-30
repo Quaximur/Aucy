@@ -13,9 +13,10 @@ namespace Aucy.Contracts.OnionContracts
         [Key(3)] public string Icon { get; set; }
         [Key(4)] public int? Grade { get; set; }
         [Key(5)] public int? Rarity { get; set; }
-        [Key(6)] public string BaseType { get; set; }
-        [Key(7)] public List<string> Extra { get; set; }
-        [Key(8)] public string CategoryPath { get; set; }
+        [Key(6)] public float Weight { get; set; }
+        [Key(7)] public string BaseType { get; set; }
+        [Key(8)] public List<string> Extra { get; set; }
+        [Key(9)] public string CategoryPath { get; set; }
 
         public ItemConfigDto(Guid id, 
             string name, 
@@ -23,6 +24,7 @@ namespace Aucy.Contracts.OnionContracts
             string icon, 
             int? grade, 
             int? rarity,
+            float weight,
             string baseType, 
             List<string> extra, 
             string categoryPath)
@@ -33,6 +35,7 @@ namespace Aucy.Contracts.OnionContracts
             Icon = icon;
             Grade = grade;
             Rarity = rarity;
+            Weight = weight;
             BaseType = baseType;
             Extra = extra;
             CategoryPath = categoryPath;

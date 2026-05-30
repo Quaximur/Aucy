@@ -11,7 +11,7 @@ public class ItemStack
     public Guid ConfigId { get; set; }
     public ItemConfig? Config { get; set; }
     public int Quantity { get; set; }
-    public Guid InventoryId { get; set; }
+    public Guid InventoryId { get; set; } // TODO: UNIQUE (ConfigId, InventoryId) for grouping
 
     /// <summary>
     /// If the item is put up for sale, it is removed from the ItemStack table, 

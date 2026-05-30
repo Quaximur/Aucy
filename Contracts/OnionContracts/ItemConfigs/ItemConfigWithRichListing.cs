@@ -7,8 +7,8 @@ namespace Aucy.Contracts.OnionContracts
     [MessagePackObject]
     public class ItemConfigWithRichListing : ItemConfigDto
     {
-        [Key(9)] public LotDto[] Lots { get; set; }
-        [Key(10)] public BidDto[] Bids { get; set; }
+        [Key(10)] public LotDto[] Lots { get; set; }
+        [Key(11)] public BidDto[] Bids { get; set; }
 
         public ItemConfigWithRichListing(Guid id,
             string name,
@@ -16,21 +16,23 @@ namespace Aucy.Contracts.OnionContracts
             string icon,
             int? grade,
             int? rarity,
+            float weight,
             string baseType,
             List<string> extra,
             string categoryPath,
             LotDto[] lots,
             BidDto[] bids)
 
-            : base(id,
-                  name,
-                  isUnary,
-                  icon,
-                  grade,
-                  rarity,
-                  baseType,
-                  extra,
-                  categoryPath)
+            : base(id: id,
+                  name: name,
+                  isUnary: isUnary,
+                  icon: icon,
+                  grade: grade,
+                  rarity: rarity,
+                  weight: weight,
+                  baseType: baseType,
+                  extra: extra,
+                  categoryPath: categoryPath)
         {
             Lots = lots;
             Bids = bids;

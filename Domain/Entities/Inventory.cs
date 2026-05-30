@@ -16,4 +16,9 @@ public class Inventory
     /// Simple disordered collection of items, grouped by configs
     /// </summary>
     public List<ItemStack> ItemStacks { get; set; } = [];
+
+    public int Capacity { get; set; }
+    public int UsedCapacity { get; set; }
+    public float WeightLimit { get; set; }
+    public float UsedWeight { get; set; }
 }

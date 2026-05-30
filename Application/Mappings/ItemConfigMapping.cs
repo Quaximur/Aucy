@@ -16,6 +16,7 @@ namespace Aucy.Application.Mappings
                     icon: src.Icon,
                     grade: src.Grade,
                     rarity: src.Rarity,
+                    weight: src.Weight,
                     baseType: src.BaseType,
                     extra: src.Extra,
                     categoryPath: src.CategoryPath
@@ -29,6 +30,7 @@ namespace Aucy.Application.Mappings
                     icon: src.Icon,
                     grade: src.Grade,
                     rarity: src.Rarity,
+                    weight: src.Weight,
                     baseType: src.BaseType,
                     extra: src.Extra,
                     categoryPath: src.CategoryPath

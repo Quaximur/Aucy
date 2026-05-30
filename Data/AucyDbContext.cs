@@ -48,6 +48,11 @@ public class AucyDbContext : DbContext
         builder.Entity<ItemStack>()
             .HasKey(x => x.Id);
 
+        builder.Entity<ItemStack>()
+            .HasOne(x => x.Config)
+            .WithMany()
+            .HasForeignKey(x => x.ConfigId);
+
         // Inventory
         builder.Entity<Inventory>()
              .HasKey(x => x.Id);

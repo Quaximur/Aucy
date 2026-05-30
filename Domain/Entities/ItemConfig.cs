@@ -21,6 +21,7 @@ public class ItemConfig
     public required string Icon { get; set; }
     public int? Grade { get; set; }
     public int? Rarity { get; set; }
+    public float Weight { get; set; }
 
     /// <summary>
     /// ItemConfig type baseType. Example: "golden_axe", "wheat", "iron_ore". 
@@ -37,6 +38,7 @@ public class ItemConfig
 
     public List<Lot> Lots { get; set; } = [];
     public List<Bid> Bids { get; set; } = [];
+    public List<ItemStack> ItemStacks { get; set; } = [];
 
     public static ItemConfig Create(Guid id, 
         string name, 
@@ -44,6 +46,7 @@ public class ItemConfig
         string icon, 
         int? grade, 
         int? rarity,
+        float weight,
         string baseType, 
         List<string> extra, 
         string categoryPath)
@@ -56,6 +59,7 @@ public class ItemConfig
             Icon = icon,
             Grade = grade,
             Rarity = rarity,
+            Weight = weight,
             BaseType = baseType,
             Extra = extra ?? [],
             CategoryPath = categoryPath

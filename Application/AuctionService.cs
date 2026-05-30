@@ -12,12 +12,12 @@ using System.Security.Claims;
 namespace Aucy.Application;
 
 [Authorize]
-public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) : ServiceBase<IAuctionService>,
+public class AuctionService(AucyDbContext aucyDbContext, IMapper mapper) : ServiceBase<IAuctionService>,
 #pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
     IAuctionService
 #pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
 {
-    private readonly AucyDbContext _aucyDb = auctionDbContext;
+    private readonly AucyDbContext _aucyDb = aucyDbContext;
     private readonly IMapper _mapper = mapper;
 
     public UnaryResult<ItemConfigWithRawListing> GetItemConfig(GetItemConfigDto request)
@@ -66,39 +66,47 @@ public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) : Se
 
         Console.WriteLine($"Creating lot request for user: {userId}");
 
-        var itemConfigGuid = request.ItemConfig.Id;
+        var itemConfigId = request.ItemConfig.Id;
 
-        var lotExists = await _aucyDb.Lots.AnyAsync(l => l.OwnerUserId == userId && l.ItemConfigId == itemConfigGuid);
-        if (lotExists )
+        //TODO: Transaction 
+
+        var lotExists = await _aucyDb.Lots.AnyAsync(l => l.OwnerUserId == userId && l.ItemConfigId == itemConfigId);
+        if (lotExists)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "You already have a lot with this item"));
 
-        // Find or create the ItemConfig
-        // Mostly used for Unary items
-        var itemConfig = await _aucyDb.ItemConfigs
-            .FindAsync(itemConfigGuid);
+        // Check items existence and quantity in inventory
+        var itemStack = await _aucyDb.ItemStacks
+            .AsTracking()
+            .Include(x => x.Inventory)
+            .FirstOrDefaultAsync(s => s.InventoryId == userId &&
+                s.ConfigId == itemConfigId &&
+                s.Quantity >= request.TotalQuantity) ?? throw new RpcException(new Status(StatusCode.InvalidArgument,
+                "You don't have enough items in your inventory"));
 
-        if (itemConfig == null)
-        {
-            itemConfig = _mapper.Map<ItemConfig>(request.ItemConfig);
+        var inventory = itemStack.Inventory ?? throw new RpcException(new Status(StatusCode.NotFound, "Inventory not found"));
 
-            await _aucyDb.ItemConfigs.AddAsync(itemConfig);
+        // Reduce the quantity or remove the ItemStack
+        var remainingQuantity = itemStack.Quantity - request.TotalQuantity;
 
-            Console.WriteLine($"ItemConfig not found, created new one: {itemConfig.Id}, {itemConfig.Name}");
-        }
+        if (remainingQuantity > 0)
+            itemStack.Quantity = remainingQuantity;
         else
         {
-            Console.WriteLine($"ItemConfig found: {itemConfig.Id}, {itemConfig.Name}");
+            _aucyDb.ItemStacks.Remove(itemStack);
+            inventory.UsedCapacity -= 1;
+            if (request.ItemConfig.Weight > 0)
+                inventory.UsedWeight -= request.ItemConfig.Weight * request.TotalQuantity;
         }
 
         var lot = Lot.Create(ownerUserId: userId,
-            itemConfigId: itemConfig.Id,
+            itemConfigId: itemConfigId,
             unitPrice: request.UnitPrice,
             totalQuantity: request.TotalQuantity);
 
         await _aucyDb.Lots.AddAsync(lot);
         await _aucyDb.SaveChangesAsync();
 
-        Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfig.Id}");
+        Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
 
         return _mapper.Map<LotDto>(lot);
     }
