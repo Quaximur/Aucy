@@ -2,38 +2,25 @@
 
 public class Lot
 {
-	public Guid Id { get; set; }
-	public Guid OwnerUserId { get; set; }
-	public Guid ItemConfigId { get; set; }
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid ItemConfigId { get; set; }
 
     /// <summary>
     /// The config of the item, which is being sold in this lot. 
     /// </summary>
-    // TODO: replace with ItemStack? Because lot has access to concrete item instances
-    // ItemConfig + TotalQuantity -> ItemStack (Does it has sense?)
-    public ItemConfig? ItemConfig { get; set; } 
-	public long UnitPrice { get; set; }
-	public int TotalQuantity { get; set; }
+    public ItemConfig? ItemConfig { get; set; }
+    public long UnitPrice { get; set; }
+    public int TotalQuantity { get; set; }
     public int SoldQuantity => TotalQuantity - RemainingQuantity;
     public int RemainingQuantity { get; set; }
 
-	public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-	public static Lot Create(Guid ownerUserId, ItemConfig itemConfig, 
-        long unitPrice, int totalQuantity)
-    {
-        return new Lot
-        {
-            Id = Guid.NewGuid(),
-            OwnerUserId = ownerUserId,
-            ItemConfigId = itemConfig.Id,
-            ItemConfig = itemConfig,
-            UnitPrice = unitPrice,
-            TotalQuantity = totalQuantity,
-            RemainingQuantity = totalQuantity
-        };
-    }
-
+    /// <summary>
+    /// Create lot with an existing ItemConfig.
+    /// ItemConfig field is not included in constructoring.
+    /// </summary>
     public static Lot Create(Guid ownerUserId, Guid itemConfigId,
         long unitPrice, int totalQuantity)
     {
@@ -44,7 +31,7 @@ public class Lot
             ItemConfigId = itemConfigId,
             UnitPrice = unitPrice,
             TotalQuantity = totalQuantity,
-            RemainingQuantity= totalQuantity
+            RemainingQuantity = totalQuantity
         };
     }
 }
