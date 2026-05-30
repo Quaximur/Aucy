@@ -11,12 +11,12 @@ namespace Aucy.Contracts.OnionContracts
         [Key(2)] public long BidPrice { get; set; }
         [Key(3)] public int TotalQuantity { get; set; }
 
-        public CreateBidDto(Guid itemConfigId, Guid bidderUserId, long bidPrice, int totalAmount)
+        public CreateBidDto(Guid itemConfigId, Guid bidderUserId, long bidPrice, int totalQuantity)
         {
             ItemConfigId = itemConfigId;
             BidderUserId = bidderUserId;
             BidPrice = bidPrice;
-            TotalQuantity = totalAmount;
+            TotalQuantity = totalQuantity;
         }
     }
 }
