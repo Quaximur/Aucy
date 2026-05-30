@@ -12,13 +12,20 @@ using System.Security.Claims;
 namespace Aucy.Application;
 
 [Authorize]
-public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) :
-    ServiceBase<IAuctionService>, IAuctionService
+public class AuctionService(AucyDbContext auctionDbContext, IMapper mapper) : ServiceBase<IAuctionService>,
+#pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
+    IAuctionService
+#pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
 {
     private readonly AucyDbContext _aucyDb = auctionDbContext;
     private readonly IMapper _mapper = mapper;
 
-    public UnaryResult<ItemConfigWithLotsAndBidsDto> GetItemConfig(GetItemConfigDto request)
+    public UnaryResult<ItemConfigWithRawListing> GetItemConfig(GetItemConfigDto request)
+    {
+        throw new NotImplementedException();
+    }
+
+    public UnaryResult<ItemConfigWithRichListing> GetRichItemConfig(GetItemConfigDto request)
     {
         throw new NotImplementedException();
     }

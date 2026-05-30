@@ -12,7 +12,7 @@ namespace Aucy.Contracts.OnionContracts
     {
         [Key(0)] public Guid Id { get; set; }
         [Key(1)] public Guid ItemConfigId { get; set; }
-        [Key(2)] public Guid BidderUserId { get; set; }
+        [Key(2)] public Guid BidderUserId { get; set; } // mb for displaying bidder in the list of bids
         [Key(3)] public long BidPrice { get; set; }
         [Key(4)] public int RemainingQuantity { get; set; }
 
