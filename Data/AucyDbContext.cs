@@ -8,6 +8,8 @@ public class AucyDbContext : DbContext
     public DbSet<Lot> Lots { get; set; }
     public DbSet<Bid> Bids { get; set; }
     public DbSet<ItemConfig> ItemConfigs { get; set; }
+    public DbSet<Inventory> Inventories { get; set; }
+    public DbSet<ItemStack> ItemStacks { get; set; }
 
     public AucyDbContext(DbContextOptions<AucyDbContext> options) : base(options)
     {
@@ -41,5 +43,18 @@ public class AucyDbContext : DbContext
         // ItemConfig configuration
         builder.Entity<ItemConfig>()
             .HasKey(x => x.Id);
+
+        // ItemStack
+        builder.Entity<ItemStack>()
+            .HasKey(x => x.Id);
+
+        // Inventory
+        builder.Entity<Inventory>()
+             .HasKey(x => x.Id);
+
+        builder.Entity<Inventory>()
+            .HasMany(x => x.ItemStacks)
+            .WithOne()
+            .HasForeignKey(x => x.InventoryId);
     }
 }
