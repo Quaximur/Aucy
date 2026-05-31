@@ -1,5 +1,6 @@
 ﻿using Aucy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Aucy.Data;
 
@@ -31,6 +32,13 @@ public class AucyDbContext : DbContext
             .WithMany(x => x.Lots)
             .HasForeignKey(x => x.ItemConfigId);
 
+        builder.Entity<Lot>()
+            .HasIndex(x => new // Should be grouped
+            {
+                x.ItemConfigId,
+                x.OwnerUserId
+            }).IsUnique();
+
         // Bid configuration
         builder.Entity<Bid>()
             .HasKey(x => x.Id);
@@ -39,6 +47,13 @@ public class AucyDbContext : DbContext
             .HasOne(x => x.ItemConfig)
             .WithMany(x => x.Bids)
             .HasForeignKey(x => x.ItemConfigId);
+
+        builder.Entity<Bid>()
+            .HasIndex(x => new // Should be grouped
+            {
+                x.ItemConfigId,
+                x.BidderUserId
+            }).IsUnique();
 
         // ItemConfig configuration
         builder.Entity<ItemConfig>()
@@ -53,7 +68,8 @@ public class AucyDbContext : DbContext
             {
                 x.ConfigId,
                 x.InventoryId
-            });
+            })
+            .IsUnique();
 
         builder.Entity<ItemStack>()
             .HasOne(x => x.Config)
@@ -66,7 +82,24 @@ public class AucyDbContext : DbContext
 
         builder.Entity<Inventory>()
             .HasMany(x => x.ItemStacks)
-            .WithOne()
+            .WithOne(x => x.Inventory)
             .HasForeignKey(x => x.InventoryId);
+
+        // Check constraints
+        builder.HasCheckConstraint<Lot>(nameof(Lot.UnitPrice), ">= 1");
+        builder.HasCheckConstraint<Lot>(nameof(Lot.TotalQuantity), ">= 1");
+        builder.HasCheckConstraint<Lot>(nameof(Lot.RemainingQuantity), ">= 0");
+
+        builder.HasCheckConstraint<Bid>(nameof(Bid.BidPrice), ">= 1");
+        builder.HasCheckConstraint<Bid>(nameof(Bid.TotalQuantity), ">= 1");
+        builder.HasCheckConstraint<Bid>(nameof(Bid.RemainingQuantity), ">= 0");
+
+        builder.HasCheckConstraint<ItemStack>(nameof(ItemStack.Quantity), ">= 1");
+
+        builder.HasCheckConstraint<Inventory>(nameof(Inventory.Money), ">= 0");
+        builder.HasCheckConstraint<Inventory>(nameof(Inventory.Capacity), ">= 0");
+        builder.HasCheckConstraint<Inventory>(nameof(Inventory.UsedCapacity), ">= 0");
+        builder.HasCheckConstraint<Inventory>(nameof(Inventory.WeightLimit), ">= 0");
+        builder.HasCheckConstraint<Inventory>(nameof(Inventory.UsedWeight), ">= 0");
     }
 }

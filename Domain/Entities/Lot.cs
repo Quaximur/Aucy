@@ -1,4 +1,6 @@
-﻿namespace Aucy.Domain.Entities;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Aucy.Domain.Entities;
 
 public class Lot
 {
@@ -10,9 +12,15 @@ public class Lot
     /// The config of the item, which is being sold in this lot. 
     /// </summary>
     public ItemConfig ItemConfig { get; set; } = null!;
+
+    [Range(1, long.MaxValue)]
     public long UnitPrice { get; set; }
+
+    [Range(1, int.MaxValue)]
     public int TotalQuantity { get; set; }
     public int SoldQuantity => TotalQuantity - RemainingQuantity;
+
+    [Range(0, int.MaxValue)]
     public int RemainingQuantity { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

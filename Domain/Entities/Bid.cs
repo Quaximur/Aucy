@@ -1,4 +1,6 @@
-﻿namespace Aucy.Domain.Entities;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Aucy.Domain.Entities;
 
 public class Bid
 {
@@ -17,13 +19,17 @@ public class Bid
     /// <summary>
     /// Per item Price.
     /// </summary>
+    [Range(1, long.MaxValue)]
     public long BidPrice { get; set; }
 
     /// <summary>
     /// Amount of items of the same config, which user wants to buy for the price specified in <see cref="BidPrice"/>.
     /// </summary>
+    [Range(1, int.MaxValue)]
     public int TotalQuantity { get; set; }
     public int BoughtQuantity => TotalQuantity - RemainingQuantity;
+
+    [Range(0, int.MaxValue)]
     public int RemainingQuantity { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

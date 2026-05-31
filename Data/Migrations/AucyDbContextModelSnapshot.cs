@@ -49,9 +49,54 @@ namespace Aucy.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ItemConfigId");
+                    b.HasIndex("ItemConfigId", "BidderUserId")
+                        .IsUnique();
 
-                    b.ToTable("Bids");
+                    b.ToTable("Bids", t =>
+                        {
+                            t.HasCheckConstraint("CK_TEntity_BidPrice", "\"BidPrice\" >= 1");
+
+                            t.HasCheckConstraint("CK_TEntity_RemainingQuantity", "\"RemainingQuantity\" >= 0");
+
+                            t.HasCheckConstraint("CK_TEntity_TotalQuantity", "\"TotalQuantity\" >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("Aucy.Domain.Entities.Inventory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Money")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("UsedCapacity")
+                        .HasColumnType("integer");
+
+                    b.Property<float>("UsedWeight")
+                        .HasColumnType("real");
+
+                    b.Property<float>("WeightLimit")
+                        .HasColumnType("real");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Inventories", t =>
+                        {
+                            t.HasCheckConstraint("CK_TEntity_Capacity", "\"Capacity\" >= 0");
+
+                            t.HasCheckConstraint("CK_TEntity_Money", "\"Money\" >= 0");
+
+                            t.HasCheckConstraint("CK_TEntity_UsedCapacity", "\"UsedCapacity\" >= 0");
+
+                            t.HasCheckConstraint("CK_TEntity_UsedWeight", "\"UsedWeight\" >= 0");
+
+                            t.HasCheckConstraint("CK_TEntity_WeightLimit", "\"WeightLimit\" >= 0");
+                        });
                 });
 
             modelBuilder.Entity("Aucy.Domain.Entities.ItemConfig", b =>
@@ -76,6 +121,7 @@ namespace Aucy.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("Icon")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<bool>("IsUnary")
@@ -88,9 +134,45 @@ namespace Aucy.Data.Migrations
                     b.Property<int?>("Rarity")
                         .HasColumnType("integer");
 
+                    b.Property<float>("Weight")
+                        .HasColumnType("real");
+
                     b.HasKey("Id");
 
                     b.ToTable("ItemConfigs");
+                });
+
+            modelBuilder.Entity("Aucy.Domain.Entities.ItemStack", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InventoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ItemConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryId");
+
+                    b.HasIndex("ItemConfigId");
+
+                    b.HasIndex("ConfigId", "InventoryId")
+                        .IsUnique();
+
+                    b.ToTable("ItemStacks", t =>
+                        {
+                            t.HasCheckConstraint("CK_TEntity_Quantity", "\"Quantity\" >= 1");
+                        });
                 });
 
             modelBuilder.Entity("Aucy.Domain.Entities.Lot", b =>
@@ -119,9 +201,17 @@ namespace Aucy.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ItemConfigId");
+                    b.HasIndex("ItemConfigId", "OwnerUserId")
+                        .IsUnique();
 
-                    b.ToTable("Lots");
+                    b.ToTable("Lots", t =>
+                        {
+                            t.HasCheckConstraint("CK_TEntity_RemainingQuantity", "\"RemainingQuantity\" >= 0");
+
+                            t.HasCheckConstraint("CK_TEntity_TotalQuantity", "\"TotalQuantity\" >= 1");
+
+                            t.HasCheckConstraint("CK_TEntity_UnitPrice", "\"UnitPrice\" >= 1");
+                        });
                 });
 
             modelBuilder.Entity("Aucy.Domain.Entities.Bid", b =>
@@ -135,6 +225,29 @@ namespace Aucy.Data.Migrations
                     b.Navigation("ItemConfig");
                 });
 
+            modelBuilder.Entity("Aucy.Domain.Entities.ItemStack", b =>
+                {
+                    b.HasOne("Aucy.Domain.Entities.ItemConfig", "Config")
+                        .WithMany()
+                        .HasForeignKey("ConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Aucy.Domain.Entities.Inventory", "Inventory")
+                        .WithMany("ItemStacks")
+                        .HasForeignKey("InventoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Aucy.Domain.Entities.ItemConfig", null)
+                        .WithMany("ItemStacks")
+                        .HasForeignKey("ItemConfigId");
+
+                    b.Navigation("Config");
+
+                    b.Navigation("Inventory");
+                });
+
             modelBuilder.Entity("Aucy.Domain.Entities.Lot", b =>
                 {
                     b.HasOne("Aucy.Domain.Entities.ItemConfig", "ItemConfig")
@@ -146,9 +259,16 @@ namespace Aucy.Data.Migrations
                     b.Navigation("ItemConfig");
                 });
 
+            modelBuilder.Entity("Aucy.Domain.Entities.Inventory", b =>
+                {
+                    b.Navigation("ItemStacks");
+                });
+
             modelBuilder.Entity("Aucy.Domain.Entities.ItemConfig", b =>
                 {
                     b.Navigation("Bids");
+
+                    b.Navigation("ItemStacks");
 
                     b.Navigation("Lots");
                 });

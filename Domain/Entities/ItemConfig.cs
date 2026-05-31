@@ -1,4 +1,6 @@
-﻿namespace Aucy.Domain.Entities;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Aucy.Domain.Entities;
 
 /// <summary>
 /// Item configuration. 
@@ -21,6 +23,8 @@ public class ItemConfig
     public required string Icon { get; set; }
     public int? Grade { get; set; }
     public int? Rarity { get; set; }
+
+    [Range(0, float.MaxValue)]
     public float Weight { get; set; }
 
     /// <summary>

@@ -1,4 +1,6 @@
-﻿namespace Aucy.Domain.Entities;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Aucy.Domain.Entities;
 
 /// <summary>
 /// Group of item instances. 
@@ -10,6 +12,8 @@ public class ItemStack
     public Guid Id { get; set; }
     public Guid ConfigId { get; set; }
     public ItemConfig Config { get; set; } = null!;
+
+    [Range(1, int.MaxValue)]
     public int Quantity { get; set; }
     public Guid InventoryId { get; set; } // TODO: UNIQUE (ConfigId, InventoryId) for grouping
 
