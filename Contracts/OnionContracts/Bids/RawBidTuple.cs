@@ -1,13 +1,14 @@
 ﻿using MessagePack;
 
-namespace Aucy.Contracts.OnionContracts;
-
-/// <summary>
-/// Group by BidPrice with SUM of RemainingQuantity.
-/// </summary>
-[MessagePackObject]
-public readonly struct RawBidTuple
+namespace Aucy.Contracts.OnionContracts
 {
-    [Key(0)] public long BidPrice { get; }
-    [Key(1)] public long RemainingQuantity { get; }
+    /// <summary>
+    /// Group by BidPrice with SUM of RemainingQuantity.
+    /// </summary>
+    [MessagePackObject]
+    public readonly struct RawBidTuple
+    {
+        [Key(0)] public long BidPrice { get; }
+        [Key(1)] public long RemainingQuantity { get; }
+    }
 }

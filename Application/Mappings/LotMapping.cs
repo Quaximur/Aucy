@@ -29,6 +29,6 @@ public class LotMapping : Profile
                 createdAt: src.CreatedAt,
                 itemConfig: null
             ))
-            .ForMember(dest => dest.ItemConfig, opt => opt.MapFrom(src => src.ItemConfig)); ;
+            .ForMember(dest => dest.ItemConfig, opt => opt.MapFrom(src => src.ItemConfig));
     }
 }

@@ -102,14 +102,15 @@ public class AuctionService(AucyDbContext aucyDbContext,
             }
             else
             {
-                updatedItemStacks = await _aucyDb.ItemStacks.Where(x => x.Id == itemStack.Id)
+                updatedItemStacks = await _aucyDb.ItemStacks
+                    .Where(x => x.Id == itemStack.Id)
                     .ExecuteDeleteAsync();
 
                 usedCapacityDiff = -1;
             }
 
-            if (updatedItemStacks != 0)
-                throw new RpcException(new Status(StatusCode.NotFound, "ItemStack not found."));
+            if (updatedItemStacks != 1)
+                throw new RpcException(new Status(StatusCode.NotFound, $"ItemStack is not determined. Entries found: {updatedItemStacks}"));
 
             float usedWeightDiff = 0;
 

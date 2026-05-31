@@ -24,6 +24,8 @@ builder.AddDataServices();
 
 services.AddMagicOnion();
 
+services.AddScoped<InventoryPropertiesService>();
+
 services.AddApiAuth();
 
 services.AddAutoMapper(x =>
@@ -62,5 +64,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapMagicOnionService<AuctionService>();
+app.MapMagicOnionService<InventoryService>();
 
 app.Run();

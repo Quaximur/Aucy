@@ -84,8 +84,8 @@ public class InventoryService(AucyDbContext aucyDbContext,
                     .Where(x => x.Id == itemStackId)
                     .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity + request.Quantity));
 
-                if (updatedItemStacks != 0)
-                    throw new RpcException(new Status(StatusCode.NotFound, "ItemStack not found."));
+                if (updatedItemStacks != 1)
+                    throw new RpcException(new Status(StatusCode.NotFound, $"ItemStack is not determined. Entries found: {updatedItemStacks}"));
             }
             else // If not found, create a new ItemStack
             {
@@ -128,14 +128,67 @@ public class InventoryService(AucyDbContext aucyDbContext,
         throw new NotImplementedException();
     }
 
-    public UnaryResult<InventoryDto> CreateInventory(CreateInventoryDto request)
+    public async UnaryResult<InventoryDto> CreateInventory(CreateInventoryDto request)
     {
-        throw new NotImplementedException();
+        var userId = GetUserIdFromContext();
+        var newInventory = new Inventory()
+        {
+            Id = userId,
+            Capacity = request.Capacity,
+            UsedCapacity = 0,
+            WeightLimit = request.WeightLimit,
+            UsedWeight = 0
+        };
+
+        await _aucyDb.Inventories.AddAsync(newInventory); // catch already existing inventory exception
+        await _aucyDb.SaveChangesAsync();
+
+        return new InventoryDto()
+        {
+            Capacity = newInventory.Capacity,
+            UsedCapacity = newInventory.UsedCapacity,
+            WeightLimit = newInventory.WeightLimit,
+            ItemStacks = []
+        };
     }
 
-    public UnaryResult<InventoryDto> GetOwnInventory(GetInventoryDto request)
+    public async UnaryResult<InventoryDto> GetOwnInventory(GetInventoryDto request)
     {
-        throw new NotImplementedException();
+        var userId = GetUserIdFromContext();
+
+        try
+        {
+            var inventory = await _aucyDb.Inventories
+                .Where(x => x.Id == userId)
+                .Select(x => new InventoryDto
+                {
+                    Capacity = x.Capacity,
+                    UsedCapacity = x.UsedCapacity,
+                    WeightLimit = x.WeightLimit,
+                    ItemStacks = x.ItemStacks
+                        .Skip((request.Page - 1) * request.PageSize)
+                        .Take(request.PageSize)
+                        .Select(i => new ItemStackDto
+                        {
+                            ItemConfig = _mapper.Map<ItemConfigDto>(i.Config),
+                            Quantity = i.Quantity,
+                        })
+                        .ToArray()
+                })
+                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
+                    "Inventory doesn't exist"));
+
+            return inventory;
+        }
+        catch (RpcException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new RpcException(new Status(StatusCode.Internal,
+                $"Failed to get inventory: {ex.Message}"));
+        }
     }
 
     public async UnaryResult<Guid> RemoveItemStack(RemoveItemStackDto request)
@@ -179,8 +232,8 @@ public class InventoryService(AucyDbContext aucyDbContext,
                     .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity - request.Quantity));
             }
 
-            if (updatedItemStacks != 0)
-                throw new RpcException(new Status(StatusCode.NotFound, "ItemStack not found."));
+            if (updatedItemStacks != 1)
+                throw new RpcException(new Status(StatusCode.NotFound, $"ItemStack is not determined. Entries found: {updatedItemStacks}"));
 
             float usedWeightDiff = 0;
             if (itemStackFields.ConfigWeight > 0)
