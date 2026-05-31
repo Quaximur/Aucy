@@ -9,7 +9,7 @@ public class ItemStack
 {
     public Guid Id { get; set; }
     public Guid ConfigId { get; set; }
-    public ItemConfig? Config { get; set; }
+    public ItemConfig Config { get; set; } = null!;
     public int Quantity { get; set; }
     public Guid InventoryId { get; set; } // TODO: UNIQUE (ConfigId, InventoryId) for grouping
 
@@ -17,5 +17,5 @@ public class ItemStack
     /// If the item is put up for sale, it is removed from the ItemStack table, 
     /// and a new Lot is placed in the Lots table. So ItemStack won`t exist without Inventory.
     /// </summary>
-    public Inventory? Inventory { get; set; } 
+    public Inventory Inventory { get; set; } = null!;
 }

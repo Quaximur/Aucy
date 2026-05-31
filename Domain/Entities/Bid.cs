@@ -12,7 +12,7 @@ public class Bid
     /// User can`t determine direct lot or item instance, 
     /// because it is determined by the system based on the availability of items and lots.
     /// </summary>
-    public ItemConfig? ItemConfig { get; set; }
+    public ItemConfig ItemConfig { get; set; } = null!;
 
     /// <summary>
     /// Per item Price.

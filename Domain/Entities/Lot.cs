@@ -9,7 +9,7 @@ public class Lot
     /// <summary>
     /// The config of the item, which is being sold in this lot. 
     /// </summary>
-    public ItemConfig? ItemConfig { get; set; }
+    public ItemConfig ItemConfig { get; set; } = null!;
     public long UnitPrice { get; set; }
     public int TotalQuantity { get; set; }
     public int SoldQuantity => TotalQuantity - RemainingQuantity;

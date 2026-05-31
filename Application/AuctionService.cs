@@ -12,12 +12,15 @@ using System.Security.Claims;
 namespace Aucy.Application;
 
 [Authorize]
-public class AuctionService(AucyDbContext aucyDbContext, IMapper mapper) : ServiceBase<IAuctionService>,
+public class AuctionService(AucyDbContext aucyDbContext,
+    InventoryPropertiesService inventoryPropertiesService,
+    IMapper mapper) : ServiceBase<IAuctionService>,
 #pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
     IAuctionService
 #pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
+    private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
     private readonly IMapper _mapper = mapper;
 
     public UnaryResult<ItemConfigWithRawListing> GetItemConfig(GetItemConfigDto request)
@@ -70,67 +73,96 @@ public class AuctionService(AucyDbContext aucyDbContext, IMapper mapper) : Servi
         var itemConfigId = itemConfig.Id;
 
         //TODO: Transaction 
+        using var transaction = await _aucyDb.Database.BeginTransactionAsync();
 
-        var lotExists = await _aucyDb.Lots.AnyAsync(l => l.OwnerUserId == userId && l.ItemConfigId == itemConfigId);
-        if (lotExists)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "You already have a lot with this item"));
-
-        // Check items existence and quantity in inventory
-        var itemStack = await _aucyDb.ItemStacks
-            .FirstOrDefaultAsync(s => s.InventoryId == userId &&
-                s.ConfigId == itemConfigId &&
-                s.Quantity >= request.TotalQuantity) ?? throw new RpcException(new Status(StatusCode.InvalidArgument,
-                "You don't have enough items in your inventory"));
-
-        // Reduce the quantity or remove the ItemStack
-        var decreaseUsedCapacity = false;
-
-        if (itemStack.Quantity > request.TotalQuantity)
+        try
         {
-            await _aucyDb.ItemStacks
-                .Where(x => x.Id == itemStack.Id)
-                .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity - request.TotalQuantity));
-        }
-        else
-        {
-            _aucyDb.ItemStacks.Remove(itemStack);
-            decreaseUsedCapacity = true;
-        }
+            var lotExists = await _aucyDb.Lots.AnyAsync(l => l.OwnerUserId == userId && l.ItemConfigId == itemConfigId);
+            if (lotExists)
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "You already have a lot with this item"));
 
-        float totalWeightToRemove = 0;
-        var hasWeight = itemConfig.Weight > 0;
+            // Check items existence and quantity in inventory
+            var itemStack = await _aucyDb.ItemStacks
+                .Where(s => s.InventoryId == userId &&
+                    s.ConfigId == itemConfigId &&
+                    s.Quantity >= request.TotalQuantity)
+                .Select(s => new { s.Id, s.InventoryId, s.ConfigId, s.Quantity })
+                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.InvalidArgument,
+                    "You don't have enough items in your inventory"));
 
-        if (hasWeight)
-            totalWeightToRemove = itemConfig.Weight * request.TotalQuantity;
+            // Reduce the quantity or remove the ItemStack
+            var usedCapacityDiff = 0;
+            int updatedItemStacks = 0;
 
-        if (hasWeight || decreaseUsedCapacity)
-        {
-            var inventoryUpdateQuery = _aucyDb.Inventories
-                .Where(x => x.Id == userId);
-
-            if (hasWeight && !decreaseUsedCapacity)
-                await inventoryUpdateQuery.ExecuteUpdateAsync(x => x.SetProperty(i => i.UsedWeight, i => i.UsedWeight - totalWeightToRemove));
-            else if (!hasWeight)
-                await inventoryUpdateQuery.ExecuteUpdateAsync(x => x.SetProperty(i => i.UsedCapacity, i => i.UsedCapacity - 1));
+            if (itemStack.Quantity > request.TotalQuantity)
+            {
+                updatedItemStacks = await _aucyDb.ItemStacks
+                    .Where(x => x.Id == itemStack.Id)
+                    .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity - request.TotalQuantity));
+            }
             else
-                await inventoryUpdateQuery.ExecuteUpdateAsync(x =>
-                {
-                    x.SetProperty(i => i.UsedWeight, i => i.UsedWeight - totalWeightToRemove);
-                    x.SetProperty(i => i.UsedCapacity, i => i.UsedCapacity - 1);
-                });
+            {
+                updatedItemStacks = await _aucyDb.ItemStacks.Where(x => x.Id == itemStack.Id)
+                    .ExecuteDeleteAsync();
+
+                usedCapacityDiff = -1;
+            }
+
+            if (updatedItemStacks != 0)
+                throw new RpcException(new Status(StatusCode.NotFound, "ItemStack not found."));
+
+            float usedWeightDiff = 0;
+
+            if (itemConfig.Weight > 0)
+                usedWeightDiff = -itemConfig.Weight * request.TotalQuantity;
+
+            await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+
+            await transaction.CreateSavepointAsync("BeforeLotCreation");
+
+            try
+            {
+                // TODO: buy item if bid exists
+
+                var lot = Lot.Create(ownerUserId: userId,
+                    itemConfigId: itemConfigId,
+                    unitPrice: request.UnitPrice,
+                    totalQuantity: request.TotalQuantity);
+
+                await _aucyDb.Lots.AddAsync(lot);
+
+                await _aucyDb.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
+
+                return _mapper.Map<LotDto>(lot);
+            }
+            catch (RpcException)
+            {
+                // TODO: try repeat
+                //await transaction.RollbackToSavepointAsync("BeforeLotCreation");
+                throw;
+            }
+            catch (Exception)
+            {
+                throw;
+                // TODO: try repeat
+            }
         }
-
-        var lot = Lot.Create(ownerUserId: userId,
-            itemConfigId: itemConfigId,
-            unitPrice: request.UnitPrice,
-            totalQuantity: request.TotalQuantity);
-
-        await _aucyDb.Lots.AddAsync(lot);
-        await _aucyDb.SaveChangesAsync();
-
-        Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
-
-        return _mapper.Map<LotDto>(lot);
+        catch (RpcException)
+        {
+            await transaction.RollbackAsync();
+            // TODO: try repeat
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            // TODO: try repeat
+            throw new RpcException(new Status(StatusCode.Internal,
+                $"An error occurred while creating the lot: {ex.Message}"));
+        }
     }
 
     public async UnaryResult<OwnLotsDto> GetOwnLots()
@@ -148,6 +180,7 @@ public class AuctionService(AucyDbContext aucyDbContext, IMapper mapper) : Servi
 
     public UnaryResult<Guid> RemoveLot(RemoveLotDto request)
     {
+        var userId = GetUserIdFromContext();
         throw new NotImplementedException();
     }
 

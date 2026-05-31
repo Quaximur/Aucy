@@ -27,7 +27,7 @@ public class LotMapping : Profile
                 remainingQuantity: src.RemainingQuantity,
                 totalQuantity: src.TotalQuantity,
                 createdAt: src.CreatedAt,
-                itemConfig: null!
+                itemConfig: null
             ))
             .ForMember(dest => dest.ItemConfig, opt => opt.MapFrom(src => src.ItemConfig)); ;
     }
