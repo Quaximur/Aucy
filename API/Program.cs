@@ -32,6 +32,7 @@ services.AddAutoMapper(x =>
 {
     x.AddProfile<ItemConfigMapping>();
     x.AddProfile<LotMapping>();
+    x.AddProfile<BidMapping>();
 });
 
 if (builder.Environment.IsDevelopment())

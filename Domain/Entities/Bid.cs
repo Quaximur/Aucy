@@ -32,4 +32,18 @@ public class Bid
     [Range(0, int.MaxValue)]
     public int RemainingQuantity { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public static Bid Create(Guid bidderUserId, Guid itemConfigId,
+        long bidPrice, int totalQuantity)
+    {
+        return new Bid
+        {
+            Id = Guid.NewGuid(),
+            BidderUserId = bidderUserId,
+            ItemConfigId = itemConfigId,
+            BidPrice = bidPrice,
+            TotalQuantity = totalQuantity,
+            RemainingQuantity = totalQuantity
+        };
+    }
 }

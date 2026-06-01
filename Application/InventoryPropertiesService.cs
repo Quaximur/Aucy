@@ -33,10 +33,8 @@ public class InventoryPropertiesService(AucyDbContext aucyDbContext)
             else
             {
                 updatedRows = await inventoryUpdateQuery.ExecuteUpdateAsync(x =>
-                {
-                    x.SetProperty(i => i.UsedWeight, i => i.UsedWeight + weightDiff);
-                    x.SetProperty(i => i.UsedCapacity, i => i.UsedCapacity + capacityDiff);
-                });
+                    x.SetProperty(i => i.UsedWeight, i => i.UsedWeight + weightDiff)
+                        .SetProperty(i => i.UsedCapacity, i => i.UsedCapacity + capacityDiff));
             }
 
             if (updatedRows != 1)
