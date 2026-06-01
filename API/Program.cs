@@ -25,6 +25,7 @@ builder.AddDataServices();
 services.AddMagicOnion();
 
 services.AddScoped<InventoryPropertiesService>();
+services.AddScoped<ItemsService>();
 
 services.AddApiAuth();
 

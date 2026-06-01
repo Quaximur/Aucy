@@ -10,12 +10,13 @@ public static class DI
     public static void AddDataServices(this IHostApplicationBuilder builder)
     {
         var connectionString =
-           Environment.GetEnvironmentVariable("ConnectionStrings__AucyDbContext")
+           Environment.GetEnvironmentVariable("ConnectionStrings__AucyDbContext_MS")
            ?? builder.Configuration.GetConnectionString("AucyDbContext");
 
         builder.Services.AddDbContext<AucyDbContext>(options =>
         {
-            options.UseNpgsql(connectionString);
+            options.UseSqlServer(connectionString);
+            //options.UseNpgsql(connectionString);
         });
     }
 }

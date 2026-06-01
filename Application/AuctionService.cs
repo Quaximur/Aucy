@@ -95,7 +95,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
         var itemConfig = request.ItemConfig;
         var itemConfigId = itemConfig.Id;
 
-        using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+        using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
         try
         {
@@ -134,11 +134,11 @@ public class AuctionService(AucyDbContext aucyDbContext,
                 unitPrice: request.UnitPrice,
                 totalQuantity: request.TotalQuantity);
 
-            await MatchLotWithBids(lot);
+            //await MatchLotWithBids(lot);
 
             _aucyDb.Lots.Add(lot);
 
-            await _aucyDb.SaveChangesAsync();
+            await _aucyDb.SaveChangesAsync(); // + Trigger
             await transaction.CommitAsync();
 
             Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
@@ -163,7 +163,6 @@ public class AuctionService(AucyDbContext aucyDbContext,
             throw new RpcException(new Status(StatusCode.Internal,
                 $"An error occurred while creating the lot: {ex.Message}"));
         }
-
     }
 
     public async UnaryResult<LotDto> SellUnary(Guid userId, CreateLotDto request)
@@ -184,7 +183,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
             if (request.ItemConfig.Weight > 0)
                 usedWeightDiff = checked(-request.ItemConfig.Weight * request.TotalQuantity);
 
-            await _inventoryProperties.ExecuteInventoryUpdate(userId, weightDiff: usedWeightDiff, 
+            await _inventoryProperties.ExecuteInventoryUpdate(userId, weightDiff: usedWeightDiff,
                 capacityDiff: usedCapacityDiff);
 
             // No mathing with bids for Unary items
@@ -332,7 +331,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
     private async UnaryResult<BidDto> BuyNonUnary(Guid userId, CreateBidDto request)
     {
-        using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+        using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
         try
         {
@@ -352,11 +351,11 @@ public class AuctionService(AucyDbContext aucyDbContext,
                 bidPrice: request.BidPrice,
                 totalQuantity: request.TotalQuantity);
 
-            await MatchBidWithLots(bid);
+            //await MatchBidWithLots(bid);
 
             _aucyDb.Bids.Add(bid);
 
-            await _aucyDb.SaveChangesAsync();
+            await _aucyDb.SaveChangesAsync(); // + Trigger
             await transaction.CommitAsync();
 
             return _mapper.Map<BidDto>(bid);
