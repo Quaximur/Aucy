@@ -37,8 +37,10 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
         try
         {
-            var inventory = await _aucyDb.Inventories
-                .Where(x => x.Id == userId).FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
+            var inventoryFields = await _aucyDb.Inventories
+                .Where(x => x.Id == userId)
+                .Select(x => new { x.Id, x.Capacity, x.UsedCapacity, x.WeightLimit, x.UsedWeight })
+                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
                     "Inventory doesn`t exist"));
 
             // Find or create the ItemConfig
@@ -59,7 +61,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
                 Console.WriteLine($"ItemConfig found: {itemConfig.Id}, {itemConfig.Name}");
             }
 
-            if (inventory.UsedCapacity + request.Quantity > inventory.Capacity)
+            if (inventoryFields.UsedCapacity + request.Quantity > inventoryFields.Capacity)
                 throw new RpcException(new Status(StatusCode.ResourceExhausted, "Inventory capacity limit exceeded"));
 
             float usedWeightDiff = 0;
@@ -68,12 +70,13 @@ public class InventoryService(AucyDbContext aucyDbContext,
             {
                 usedWeightDiff = itemConfig.Weight * request.Quantity;
 
-                if (inventory.UsedWeight + usedWeightDiff > inventory.WeightLimit)
+                if (inventoryFields.UsedWeight + usedWeightDiff > inventoryFields.WeightLimit)
                     throw new RpcException(new Status(StatusCode.ResourceExhausted, "Inventory weight limit exceeded"));
             }
 
             // Try to update an existing ItemStack with the same ConfigId or create new one if not found
-            var usedCapacityDiff = await _itemsService.UpsertItemStack(itemConfig.Id, request.Quantity, inventory.Id);
+            var usedCapacityDiff = await _itemsService.UpsertItemStack(itemConfig.Id, request.Quantity, 
+                inventoryFields.Id);
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
 
@@ -174,12 +177,8 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
         try
         {
-            var inventory = await _aucyDb.Inventories
-                .Where(x => x.Id == userId).FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
-                    "Inventory doesn`t exist"));
-
             var itemStackFields = await _aucyDb.ItemStacks
-                .Where(i => i.Id == request.ItemStackId && i.InventoryId == inventory.Id)
+                .Where(i => i.Id == request.ItemStackId && i.InventoryId == userId)
                 .Select(x => new { x.Id, x.Quantity, ConfigWeight = x.Config.Weight })
                 .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
                     "ItemStack not found in inventory"));

@@ -133,7 +133,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
 
-            // TODO: If you don`t want to create lot after instant soldout,
+            // TIP: If you don`t want to create lot after instant soldout,
             // when you have to validate inventory properties
             var lot = Lot.Create(ownerUserId: userId,
                 itemConfigId: itemConfigId,
@@ -185,10 +185,81 @@ public class AuctionService(AucyDbContext aucyDbContext,
         return new OwnLotsDto(lotsWithItemConfigs);
     }
 
-    public UnaryResult<Guid> RemoveLot(RemoveLotDto request)
+    public async UnaryResult<Guid> RemoveLot(RemoveLotDto request)
     {
         var userId = GetUserIdFromContext();
-        throw new NotImplementedException();
+
+        var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+
+        try
+        {
+            var lotFields = await _aucyDb.Lots
+                .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                .Select(b => new
+                {
+                    b.Id,
+                    b.ItemConfigId,
+                    ItemConfigWeight = b.ItemConfig.Weight,
+                    b.TotalQuantity,
+                    b.RemainingQuantity,
+                    b.UnitPrice,
+                    b.ExtraSoldoutMoney
+                })
+                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound, "Lot doesn`t exist"));
+
+            var deletedLots = await _aucyDb.Lots
+                .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                .ExecuteDeleteAsync();
+
+            if (deletedLots != 1)
+                throw new RpcException(new Status(StatusCode.NotFound,
+                    $"Lot is not determined. Entries found: {deletedLots}"));
+
+            var soldQuantity = lotFields.TotalQuantity - lotFields.RemainingQuantity;
+
+            var returningMoney = checked(lotFields.UnitPrice * soldQuantity + lotFields.ExtraSoldoutMoney);
+            // TODO: apply commission
+
+            if (returningMoney > 0)
+                await _inventoryProperties.DepositMoney(userId, returningMoney);
+
+            // If some items were not sold, return them to the inventory
+            if (lotFields.RemainingQuantity > 0)
+            {
+                // Try to update an existing ItemStack with the same ConfigId or create new one if not found
+                var usedCapacityDiff = await _itemsService.UpsertItemStack(lotFields.ItemConfigId,
+                    lotFields.RemainingQuantity, userId);
+
+                // Alter inventory UsedWeight
+                float usedWeightDiff = 0;
+
+                // Can be applied by parts in cycle if numbers are too large
+                if (lotFields.ItemConfigWeight > 0)
+                    usedWeightDiff = checked(lotFields.ItemConfigWeight * lotFields.RemainingQuantity);
+
+                await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+            }
+
+            await transaction.CommitAsync();
+
+            return request.LotId;
+        }
+        catch (OverflowException)
+        {
+            await transaction.RollbackAsync();
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Amount is too large"));
+        }
+        catch (RpcException)
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            throw new RpcException(new Status(StatusCode.Internal,
+                $"An error occurred while removing the lot: {ex.Message}"));
+        }
     }
 
     public async UnaryResult<BidDto> CreateBid(CreateBidDto request)
@@ -295,7 +366,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
             if (deletedBids != 1)
                 throw new RpcException(new Status(StatusCode.NotFound,
-                    $"Bid is net determined. Entries found: {deletedBids}"));
+                    $"Bid is not determined. Entries found: {deletedBids}"));
 
             var returningMoney = checked(bidFields.BidPrice * bidFields.RemainingQuantity + bidFields.ExtraBuyoutMoney);
             if (returningMoney > 0)
