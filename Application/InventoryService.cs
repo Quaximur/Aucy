@@ -33,6 +33,15 @@ public class InventoryService(AucyDbContext aucyDbContext,
         var userId = GetUserIdFromContext();
         var itemConfigId = request.ItemConfig.Id;
 
+        if (request.Quantity <= 0)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Quantity must be greater than zero"));
+
+        if (request.ItemConfig == null)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "ItemConfig must be provided"));
+
+        if (request.ItemConfig.IsUnary && request.Quantity != 1)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Quantity must be 1 for unary items"));
+
         using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
         try
@@ -75,7 +84,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
             }
 
             // Try to update an existing ItemStack with the same ConfigId or create new one if not found
-            var usedCapacityDiff = await _itemsService.UpsertItemStack(itemConfig.Id, request.Quantity, 
+            var usedCapacityDiff = await _itemsService.UpsertItemStack(itemConfig.Id, request.Quantity,
                 inventoryFields.Id);
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);

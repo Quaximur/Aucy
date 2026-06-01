@@ -40,4 +40,31 @@ public class ItemsService(AucyDbContext aucyDbContext,
 
         return usedCapacityDiff;
     }
+
+    public async Task<int> UpleteItemStack(Guid itemConfigId, int quantity, Guid inventoryId)
+    {
+        // Reduce the quantity or remove the ItemStack
+        var usedCapacityDiff = 0;
+
+        var updatedItemStacks = await _aucyDb.ItemStacks
+                .Where(x => x.ConfigId == itemConfigId && x.InventoryId == inventoryId && x.Quantity > quantity)
+                .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity - quantity));
+
+        if (updatedItemStacks == 0)
+        {
+            updatedItemStacks = await _aucyDb.ItemStacks
+                 .Where(x => x.ConfigId == itemConfigId && x.InventoryId == inventoryId && x.Quantity == quantity)
+                 .ExecuteDeleteAsync();
+
+            usedCapacityDiff = -1;
+        }
+
+        if (updatedItemStacks != 1)
+        {
+            throw new RpcException(new Status(StatusCode.NotFound,
+                $"ItemStack with specified quantity is not determined. Entries found: {updatedItemStacks}"));
+        }
+
+        return usedCapacityDiff;
+    }
 }
