@@ -142,8 +142,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
             await MatchLotWithBids(lot);
 
-            if (lot.RemainingQuantity > 0)
-                await _aucyDb.Lots.AddAsync(lot);
+            _aucyDb.Lots.Add(lot);
 
             await _aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -298,9 +297,8 @@ public class AuctionService(AucyDbContext aucyDbContext,
                 totalQuantity: request.TotalQuantity);
 
             await MatchBidWithLots(bid, itemConfig.Weight);
-
-            if (bid.RemainingQuantity > 0)
-                await _aucyDb.Bids.AddAsync(bid);
+            
+            _aucyDb.Bids.Add(bid);
 
             await _aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();

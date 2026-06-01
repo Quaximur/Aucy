@@ -51,7 +51,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
             {
                 itemConfig = _mapper.Map<ItemConfig>(request.ItemConfig);
 
-                await _aucyDb.ItemConfigs.AddAsync(itemConfig);
+                _aucyDb.ItemConfigs.Add(itemConfig);
                 await _aucyDb.SaveChangesAsync(); // save instantly to use for ItemStack update
 
                 Console.WriteLine($"ItemConfig not found, created new one: {itemConfig.Id}, {itemConfig.Name}");
@@ -80,7 +80,6 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
 
-            await _aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
             return Nil.Default;
@@ -115,7 +114,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
             UsedWeight = 0
         };
 
-        await _aucyDb.Inventories.AddAsync(newInventory); // catch already existing inventory exception
+        _aucyDb.Inventories.Add(newInventory); // catch already existing inventory exception
         await _aucyDb.SaveChangesAsync();
 
         return new InventoryDto()
@@ -214,7 +213,6 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
 
-            await _aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
             return Nil.Default;

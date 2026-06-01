@@ -38,7 +38,7 @@ public class InventoryPropertiesService(AucyDbContext aucyDbContext)
             }
 
             if (updatedRows != 1)
-                throw new RpcException(new Status(StatusCode.NotFound, "Inventory not found. Can`t update properties"));
+                throw new RpcException(new Status(StatusCode.NotFound, "Inventory is not determined. Can`t update properties"));
         }
     }
 

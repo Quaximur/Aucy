@@ -27,7 +27,8 @@ public class ItemsService(AucyDbContext aucyDbContext,
         {
             var itemStack = ItemStack.Create(itemConfigId, quantity, inventoryId);
 
-            await _aucyDb.ItemStacks.AddAsync(itemStack);
+            _aucyDb.ItemStacks.Add(itemStack);
+            await _aucyDb.SaveChangesAsync();
 
             usedCapacityDiff = 1;
         }
