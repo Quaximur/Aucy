@@ -200,6 +200,11 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
             return _mapper.Map<LotDto>(lot);
         }
+        catch (OverflowException)
+        {
+            await transaction.RollbackAsync();
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Lot total price is too large"));
+        }
         catch (RpcException)
         {
             await transaction.RollbackAsync();
