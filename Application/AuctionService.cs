@@ -275,10 +275,14 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
         try
         {
-            var itemConfig = await _aucyDb.ItemConfigs
-                .AsTracking()
-                .FirstOrDefaultAsync(x => x.Id == request.ItemConfigId)
+            var itemConfigFields = await _aucyDb.ItemConfigs
+                .Where(x => x.Id == request.ItemConfigId)
+                .Select(x => new { x.IsUnary })
+                .FirstOrDefaultAsync()
                      ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
+
+            if (itemConfigFields.IsUnary && request.TotalQuantity != 1)
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be 1 for unary item"));
 
             var bidExists = await _aucyDb.Bids.AnyAsync(b =>
                 b.BidderUserId == userId &&
@@ -296,8 +300,8 @@ public class AuctionService(AucyDbContext aucyDbContext,
                 bidPrice: request.BidPrice,
                 totalQuantity: request.TotalQuantity);
 
-            await MatchBidWithLots(bid, itemConfig.Weight);
-            
+            await MatchBidWithLots(bid);
+
             _aucyDb.Bids.Add(bid);
 
             await _aucyDb.SaveChangesAsync();
@@ -452,7 +456,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
         }
     }
 
-    private async Task MatchBidWithLots(Bid bid, float itemWeight)
+    private async Task MatchBidWithLots(Bid bid)
     {
         // TODO: optimize. ExecuteUpdate. Take by parts mb.
         var lots = await _aucyDb.Lots
