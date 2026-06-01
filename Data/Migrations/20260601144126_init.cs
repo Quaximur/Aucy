@@ -63,12 +63,14 @@ namespace Aucy.Data.Migrations
                     BidPrice = table.Column<long>(type: "bigint", nullable: false),
                     TotalQuantity = table.Column<int>(type: "integer", nullable: false),
                     RemainingQuantity = table.Column<int>(type: "integer", nullable: false),
+                    ExtraBuyoutMoney = table.Column<long>(type: "bigint", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Bids", x => x.Id);
                     table.CheckConstraint("CK_TEntity_BidPrice", "\"BidPrice\" >= 1");
+                    table.CheckConstraint("CK_TEntity_ExtraBuyoutMoney", "\"ExtraBuyoutMoney\" >= 0");
                     table.CheckConstraint("CK_TEntity_RemainingQuantity", "\"RemainingQuantity\" >= 0");
                     table.CheckConstraint("CK_TEntity_TotalQuantity", "\"TotalQuantity\" >= 1");
                     table.ForeignKey(
@@ -122,11 +124,13 @@ namespace Aucy.Data.Migrations
                     UnitPrice = table.Column<long>(type: "bigint", nullable: false),
                     TotalQuantity = table.Column<int>(type: "integer", nullable: false),
                     RemainingQuantity = table.Column<int>(type: "integer", nullable: false),
+                    ExtraSoldoutMoney = table.Column<long>(type: "bigint", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Lots", x => x.Id);
+                    table.CheckConstraint("CK_TEntity_ExtraSoldoutMoney", "\"ExtraSoldoutMoney\" >= 0");
                     table.CheckConstraint("CK_TEntity_RemainingQuantity", "\"RemainingQuantity\" >= 0");
                     table.CheckConstraint("CK_TEntity_TotalQuantity", "\"TotalQuantity\" >= 1");
                     table.CheckConstraint("CK_TEntity_UnitPrice", "\"UnitPrice\" >= 1");

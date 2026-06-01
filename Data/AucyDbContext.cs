@@ -1,6 +1,5 @@
 ﻿using Aucy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Aucy.Data;
 
@@ -89,10 +88,12 @@ public class AucyDbContext : DbContext
         builder.HasCheckConstraint<Lot>(nameof(Lot.UnitPrice), ">= 1");
         builder.HasCheckConstraint<Lot>(nameof(Lot.TotalQuantity), ">= 1");
         builder.HasCheckConstraint<Lot>(nameof(Lot.RemainingQuantity), ">= 0");
+        builder.HasCheckConstraint<Lot>(nameof(Lot.ExtraSoldoutMoney), ">= 0");
 
         builder.HasCheckConstraint<Bid>(nameof(Bid.BidPrice), ">= 1");
         builder.HasCheckConstraint<Bid>(nameof(Bid.TotalQuantity), ">= 1");
         builder.HasCheckConstraint<Bid>(nameof(Bid.RemainingQuantity), ">= 0");
+        builder.HasCheckConstraint<Bid>(nameof(Bid.ExtraBuyoutMoney), ">= 0");
 
         builder.HasCheckConstraint<ItemStack>(nameof(ItemStack.Quantity), ">= 1");
 

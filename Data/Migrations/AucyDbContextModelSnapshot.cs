@@ -38,6 +38,9 @@ namespace Aucy.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long>("ExtraBuyoutMoney")
+                        .HasColumnType("bigint");
+
                     b.Property<Guid>("ItemConfigId")
                         .HasColumnType("uuid");
 
@@ -55,6 +58,8 @@ namespace Aucy.Data.Migrations
                     b.ToTable("Bids", t =>
                         {
                             t.HasCheckConstraint("CK_TEntity_BidPrice", "\"BidPrice\" >= 1");
+
+                            t.HasCheckConstraint("CK_TEntity_ExtraBuyoutMoney", "\"ExtraBuyoutMoney\" >= 0");
 
                             t.HasCheckConstraint("CK_TEntity_RemainingQuantity", "\"RemainingQuantity\" >= 0");
 
@@ -184,6 +189,9 @@ namespace Aucy.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long>("ExtraSoldoutMoney")
+                        .HasColumnType("bigint");
+
                     b.Property<Guid>("ItemConfigId")
                         .HasColumnType("uuid");
 
@@ -206,6 +214,8 @@ namespace Aucy.Data.Migrations
 
                     b.ToTable("Lots", t =>
                         {
+                            t.HasCheckConstraint("CK_TEntity_ExtraSoldoutMoney", "\"ExtraSoldoutMoney\" >= 0");
+
                             t.HasCheckConstraint("CK_TEntity_RemainingQuantity", "\"RemainingQuantity\" >= 0");
 
                             t.HasCheckConstraint("CK_TEntity_TotalQuantity", "\"TotalQuantity\" >= 1");
