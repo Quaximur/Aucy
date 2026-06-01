@@ -23,6 +23,13 @@ public class Lot
     [Range(0, int.MaxValue)]
     public int RemainingQuantity { get; set; }
 
+    /// <summary>
+    /// Item can be sold with higher price than specified in <see cref="UnitPrice"/> at the moment of lot creation. 
+    /// In this case, user will receive more money for the item. That difference will be stored here.
+    /// </summary>
+    [Range(0, long.MaxValue)]
+    public long ExtraSoldoutMoney { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>

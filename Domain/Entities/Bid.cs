@@ -31,6 +31,13 @@ public class Bid
 
     [Range(0, int.MaxValue)]
     public int RemainingQuantity { get; set; }
+
+    /// <summary>
+    /// Item can be bought with lower price than specified in <see cref="BidPrice"/> at the moment of bid creation. 
+    /// In this case, user will pay less money for the item. That difference will be stored here.
+    /// </summary>
+    [Range(0, long.MaxValue)]
+    public long ExtraBuyoutMoney { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public static Bid Create(Guid bidderUserId, Guid itemConfigId,

@@ -22,4 +22,15 @@ public class ItemStack
     /// and a new Lot is placed in the Lots table. So ItemStack won`t exist without Inventory.
     /// </summary>
     public Inventory Inventory { get; set; } = null!;
+
+    public static ItemStack Create(Guid configId, int quantity, Guid inventoryId)
+    {
+        return new ItemStack
+        {
+            Id = Guid.NewGuid(),
+            ConfigId = configId,
+            Quantity = quantity,
+            InventoryId = inventoryId
+        };
+    }
 }

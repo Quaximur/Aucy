@@ -15,6 +15,7 @@ namespace Aucy.Application;
 [Authorize]
 public class AuctionService(AucyDbContext aucyDbContext,
     InventoryPropertiesService inventoryPropertiesService,
+    ItemsService itemsService,
     IMapper mapper) : ServiceBase<IAuctionService>,
 #pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
     IAuctionService
@@ -22,6 +23,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
     private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
+    private readonly ItemsService _itemsService = itemsService;
     private readonly IMapper _mapper = mapper;
 
     public UnaryResult<ItemConfigWithRawListing> GetItemConfig(GetItemConfigDto request)
@@ -131,7 +133,8 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
 
-            // TODO: create lot only after matching with bids and if TotalQuantity > 0 after matching
+            // TODO: If you don`t want to create lot after instant soldout,
+            // when you have to validate inventory properties
             var lot = Lot.Create(ownerUserId: userId,
                 itemConfigId: itemConfigId,
                 unitPrice: request.UnitPrice,
@@ -215,7 +218,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
                 throw new RpcException(new Status(StatusCode.InvalidArgument, "You already have a bid with this item"));
 
             var reservedMoney = checked(request.BidPrice * request.TotalQuantity);
-            await WithdrawMoney(userId, reservedMoney);
+            await _inventoryProperties.WithdrawMoney(userId, reservedMoney);
 
             var bid = Bid.Create(
                 bidderUserId: userId,
@@ -264,9 +267,79 @@ public class AuctionService(AucyDbContext aucyDbContext,
         return new OwnBidsDto(ownBids);
     }
 
-    public UnaryResult<Guid> RemoveBid(RemoveBidDto request)
+    public async UnaryResult<Guid> RemoveBid(RemoveBidDto request)
     {
-        throw new NotImplementedException();
+        var userId = GetUserIdFromContext();
+
+        var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+
+        try
+        {
+            var bidFields = await _aucyDb.Bids
+                .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                .Select(b => new
+                {
+                    b.Id,
+                    b.ItemConfigId,
+                    ItemConfigWeight = b.ItemConfig.Weight,
+                    b.TotalQuantity,
+                    b.RemainingQuantity,
+                    b.BidPrice,
+                    b.ExtraBuyoutMoney
+                })
+                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound, "Bid doesn`t exist"));
+
+            var deletedBids = await _aucyDb.Bids
+                .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                .ExecuteDeleteAsync();
+
+            if (deletedBids != 1)
+                throw new RpcException(new Status(StatusCode.NotFound,
+                    $"Bid is net determined. Entries found: {deletedBids}"));
+
+            var returningMoney = checked(bidFields.BidPrice * bidFields.RemainingQuantity + bidFields.ExtraBuyoutMoney);
+            if (returningMoney > 0)
+                await _inventoryProperties.DepositMoney(userId, returningMoney);
+
+            // If some items were bought
+            if (bidFields.RemainingQuantity < bidFields.TotalQuantity)
+            {
+                var boughtQuantity = bidFields.TotalQuantity - bidFields.RemainingQuantity;
+
+                // Try to update an existing ItemStack with the same ConfigId or create new one if not found
+                var usedCapacityDiff = await _itemsService.UpsertItemStack(bidFields.ItemConfigId,
+                    boughtQuantity, userId);
+
+                // Alter inventory UsedWeight
+                float usedWeightDiff = 0;
+
+                // Can be applied by parts in cycle if numbers are too big.
+                if (bidFields.ItemConfigWeight > 0)
+                    usedWeightDiff = checked(bidFields.ItemConfigWeight * boughtQuantity);
+
+                await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+            }
+
+            await transaction.CommitAsync();
+
+            return request.BidId;
+        }
+        catch (OverflowException)
+        {
+            await transaction.RollbackAsync();
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Returning amount is too large"));
+        }
+        catch (RpcException)
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            throw new RpcException(new Status(StatusCode.Internal,
+                $"An error occurred while removing the bid: {ex.Message}"));
+        }
     }
 
     private Guid GetUserIdFromContext()
@@ -284,6 +357,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
     private async Task MatchLotWithBids(Lot lot)
     {
+        // TODO: optimize. ExecuteUpdate. Take by parts mb.
         var bids = await _aucyDb.Bids
             .AsTracking()
             .Where(x =>
@@ -304,13 +378,14 @@ public class AuctionService(AucyDbContext aucyDbContext,
             bid.RemainingQuantity -= tradeQuantity;
             lot.RemainingQuantity -= tradeQuantity;
 
-            // TODO: add money instantly. Because remaining quantity is bound to the price, but it can be higher for
-            // bought items. It is better to alter TotalQuantity and pay money to seller if bids are matched here.
+            if (lot.UnitPrice < bid.BidPrice)
+                lot.ExtraSoldoutMoney += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
         }
     }
 
     private async Task MatchBidWithLots(Bid bid, float itemWeight)
     {
+        // TODO: optimize. ExecuteUpdate. Take by parts mb.
         var lots = await _aucyDb.Lots
             .AsTracking()
             .Where(x =>
@@ -321,44 +396,18 @@ public class AuctionService(AucyDbContext aucyDbContext,
             .ThenBy(x => x.CreatedAt) // TODO: random order
             .ToListAsync();
 
-        long refund = 0;
-
         foreach (var lot in lots)
         {
             if (bid.RemainingQuantity == 0)
                 break;
 
             var tradeQuantity = Math.Min(bid.RemainingQuantity, lot.RemainingQuantity);
-            var tradePrice = checked(lot.UnitPrice * tradeQuantity);
-
-            if (bid.BidPrice > lot.UnitPrice)
-                refund = checked(refund + (bid.BidPrice - lot.UnitPrice) * tradeQuantity);
 
             lot.RemainingQuantity -= tradeQuantity;
             bid.RemainingQuantity -= tradeQuantity;
+
+            if (bid.BidPrice > lot.UnitPrice)
+                bid.ExtraBuyoutMoney += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
         }
-
-        if (refund > 0)
-            await DepositMoney(bid.BidderUserId, refund);
-    }
-
-    private async Task WithdrawMoney(Guid userId, long amount)
-    {
-        var updatedRows = await _aucyDb.Inventories
-            .Where(x => x.Id == userId && x.Money >= amount)
-            .ExecuteUpdateAsync(x => x.SetProperty(i => i.Money, i => i.Money - amount));
-
-        if (updatedRows != 1)
-            throw new RpcException(new Status(StatusCode.ResourceExhausted, "Not enough money"));
-    }
-
-    private async Task DepositMoney(Guid userId, long amount)
-    {
-        var updatedRows = await _aucyDb.Inventories
-            .Where(x => x.Id == userId)
-            .ExecuteUpdateAsync(x => x.SetProperty(i => i.Money, i => i.Money + amount));
-
-        if (updatedRows != 1)
-            throw new RpcException(new Status(StatusCode.NotFound, "Inventory not found. Can`t update money."));
     }
 }

@@ -5,16 +5,18 @@ using AutoMapper;
 using Grpc.Core;
 using MagicOnion;
 using MagicOnion.Server;
+using MessagePack;
 using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
+using System.Security.Claims;
 
 namespace Aucy.Application;
 
 [Authorize]
 public class InventoryService(AucyDbContext aucyDbContext,
     InventoryPropertiesService inventoryPropertiesService,
+    ItemsService itemsService,
     IMapper mapper) : ServiceBase<IInventoryService>,
 #pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
     IInventoryService
@@ -23,9 +25,10 @@ public class InventoryService(AucyDbContext aucyDbContext,
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
     private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
+    private readonly ItemsService _itemsService = itemsService;
     private readonly IMapper _mapper = mapper;
 
-    public async UnaryResult<Guid> AddItemStack(AddItemStackDto request)
+    public async UnaryResult<Nil> AddItemStack(AddItemStackDto request)
     {
         var userId = GetUserIdFromContext();
         var itemConfigId = request.ItemConfig.Id;
@@ -69,46 +72,15 @@ public class InventoryService(AucyDbContext aucyDbContext,
                     throw new RpcException(new Status(StatusCode.ResourceExhausted, "Inventory weight limit exceeded"));
             }
 
-            // Try to find an existing ItemStack with the same ConfigId in the inventory
-            var itemStack = await _aucyDb.ItemStacks
-                .FirstOrDefaultAsync(i => i.InventoryId == inventory.Id &&
-                    i.ConfigId == itemConfig.Id);
-
-            Guid itemStackId;
-            var usedCapacityDiff = 0;
-
-            if (itemStack != null) // If found, update the quantity
-            {
-                itemStackId = itemStack.Id;
-                var updatedItemStacks = await _aucyDb.ItemStacks
-                    .Where(x => x.Id == itemStackId)
-                    .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity + request.Quantity));
-
-                if (updatedItemStacks != 1)
-                    throw new RpcException(new Status(StatusCode.NotFound, $"ItemStack is not determined. Entries found: {updatedItemStacks}"));
-            }
-            else // If not found, create a new ItemStack
-            {
-                itemStackId = Guid.NewGuid();
-                itemStack = new ItemStack()
-                {
-                    Id = itemStackId,
-                    ConfigId = itemConfig.Id,
-                    Quantity = request.Quantity,
-                    InventoryId = inventory.Id
-                };
-
-                await _aucyDb.ItemStacks.AddAsync(itemStack);
-                usedCapacityDiff = 1;
-            }
+            // Try to update an existing ItemStack with the same ConfigId or create new one if not found
+            var usedCapacityDiff = await _itemsService.UpsertItemStack(itemConfig.Id, request.Quantity, inventory.Id);
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
 
             await _aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return itemStackId;
-
+            return Nil.Default;
         }
         catch (RpcException)
         {
@@ -148,6 +120,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
             Capacity = newInventory.Capacity,
             UsedCapacity = newInventory.UsedCapacity,
             WeightLimit = newInventory.WeightLimit,
+            UsedWeight = newInventory.UsedWeight,
             ItemStacks = []
         };
     }
@@ -165,6 +138,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
                     Capacity = x.Capacity,
                     UsedCapacity = x.UsedCapacity,
                     WeightLimit = x.WeightLimit,
+                    UsedWeight = x.UsedWeight,
                     ItemStacks = x.ItemStacks
                         .Skip((request.Page - 1) * request.PageSize)
                         .Take(request.PageSize)
@@ -191,7 +165,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
         }
     }
 
-    public async UnaryResult<Guid> RemoveItemStack(RemoveItemStackDto request)
+    public async UnaryResult<Nil> RemoveItemStack(RemoveItemStackDto request)
     {
         var userId = GetUserIdFromContext();
 
@@ -244,7 +218,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
             await _aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return itemStackId;
+            return Nil.Default;
         }
         catch (RpcException)
         {
