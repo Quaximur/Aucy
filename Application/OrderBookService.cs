@@ -46,11 +46,21 @@ public class OrderBookService(AucyDbContext aucyDbContext,
         if (request.TotalQuantity <= 0)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be greater than 0"));
 
+        if (request.ItemConfig == null)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Item config should be provided"));
+
+        var ownBidExists = await _aucyDb.Bids.AnyAsync(l =>
+            l.BidderUserId == userId &&
+            l.ItemConfigId == request.ItemConfig.Id);
+
+        if (ownBidExists)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "You can`t create a lot for the item you are buying"));
+
         var itemConfigFields = await _aucyDb.ItemConfigs
-                .Where(x => x.Id == request.ItemConfig.Id)
-                .Select(x => new { x.IsUnary })
-                .FirstOrDefaultAsync()
-                     ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
+            .Where(x => x.Id == request.ItemConfig.Id)
+            .Select(x => new { x.IsUnary })
+            .FirstOrDefaultAsync()
+                    ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
         if (itemConfigFields.IsUnary)
             return await SellUnary(userId, request);
@@ -341,6 +351,13 @@ public class OrderBookService(AucyDbContext aucyDbContext,
                 .Select(x => new { x.IsUnary })
                 .FirstOrDefaultAsync()
                      ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
+
+        var ownLotExists = await _aucyDb.Lots.AnyAsync(l =>
+            l.OwnerUserId == userId &&
+            l.ItemConfigId == request.ItemConfigId);
+
+        if (ownLotExists)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "You can`t create a bid for the item you are selling"));
 
         if (itemConfigFields.IsUnary)
             return await BuyUnary(userId, request);
