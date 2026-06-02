@@ -24,8 +24,10 @@ public class OrderBookService(AucyDbContext aucyDbContext,
 {
     private const int MatchingBatchSize = 256;
 
-    // TODO: Price predicate lock
-    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> MatchingLocks = new();
+    /// <summary>
+    /// Operations locking for NonUnary items mathing (by ItemConfig.Id).
+    /// </summary>
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> MatchingLocks = new(); // TODO: Price predicate lock
 
     private readonly AucyDbContext _aucyDb = aucyDbContext;
     private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
