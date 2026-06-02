@@ -93,7 +93,6 @@ public class AucyDbContext : DbContext
         builder.HasCheckConstraint<Bid>(nameof(Bid.BidPrice), ">= 1");
         builder.HasCheckConstraint<Bid>(nameof(Bid.TotalQuantity), ">= 1");
         builder.HasCheckConstraint<Bid>(nameof(Bid.RemainingQuantity), ">= 0");
-        builder.HasCheckConstraint<Bid>(nameof(Bid.ExtraBuyoutMoney), ">= 0");
 
         builder.HasCheckConstraint<ItemStack>(nameof(ItemStack.Quantity), ">= 1");
 

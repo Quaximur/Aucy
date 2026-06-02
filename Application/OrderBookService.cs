@@ -23,7 +23,7 @@ public class OrderBookService(AucyDbContext aucyDbContext,
 #pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
 {
     private const int MatchingBatchSize = 256;
-    
+
     // TODO: Price predicate lock
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> MatchingLocks = new();
 
@@ -205,6 +205,21 @@ public class OrderBookService(AucyDbContext aucyDbContext,
     {
         var userId = Context.GetUserId();
 
+        var itemConfigFields = await _aucyDb.Lots
+            .Where(x => x.Id == request.LotId && x.ItemConfig != null)
+            .Select(x => new { x.ItemConfigId, x.ItemConfig.IsUnary })
+            .FirstOrDefaultAsync()
+                ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
+
+        SemaphoreSlim? matchingLock = null;
+
+        if (!itemConfigFields.IsUnary)
+        {
+            matchingLock = GetMatchingLock(itemConfigFields.ItemConfigId);
+
+            await matchingLock.WaitAsync();
+        }
+
         var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
         try
@@ -223,21 +238,31 @@ public class OrderBookService(AucyDbContext aucyDbContext,
                 })
                 .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound, "Lot doesn`t exist"));
 
-            var deletedLots = await _aucyDb.Lots
-                .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
-                .ExecuteDeleteAsync();
+            int lotsUpdated = 0;
 
-            if (deletedLots != 1)
+            if (lotFields.RemainingQuantity < lotFields.TotalQuantity) // If some items were sold, remove only unsold quantity
+            {
+                var remainingQuantity = lotFields.RemainingQuantity;
+                lotsUpdated = await _aucyDb.Lots
+                    .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                    .ExecuteUpdateAsync(x =>
+                    {
+                        x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - remainingQuantity)
+                            .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - remainingQuantity);
+                    });
+            }
+            else // all items are unsold, we can just delete the lot
+            {
+                lotsUpdated = await _aucyDb.Lots
+                    .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                    .ExecuteDeleteAsync();
+            }
+
+            if (lotsUpdated != 1)
                 throw new RpcException(new Status(StatusCode.NotFound,
-                    $"Lot is not determined. Entries found: {deletedLots}"));
+                    $"Lot is not determined. Entries found: {lotsUpdated}"));
 
-            var soldQuantity = lotFields.TotalQuantity - lotFields.RemainingQuantity;
-
-            var returningMoney = checked(lotFields.UnitPrice * soldQuantity + lotFields.ExtraSoldoutMoney);
-            // TODO: apply commission
-
-            if (returningMoney > 0)
-                await _inventoryProperties.DepositMoney(userId, returningMoney);
+            // Sold lots remain. No money received
 
             // If some items were not sold, return them to the inventory
             if (lotFields.RemainingQuantity > 0)
@@ -276,6 +301,27 @@ public class OrderBookService(AucyDbContext aucyDbContext,
             throw new RpcException(new Status(StatusCode.Internal,
                 $"An error occurred while removing the lot: {ex.Message}"));
         }
+        finally
+        {
+            matchingLock?.Release();
+        }
+    }
+
+    public async UnaryResult<Guid> CollectLot(CollectLotDto request)
+    {
+        //var userId = Context.GetUserId();
+
+        //var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+
+        //var soldQuantity = lotFields.TotalQuantity - lotFields.RemainingQuantity;
+
+        //var returningMoney = checked(lotFields.UnitPrice * soldQuantity + lotFields.ExtraSoldoutMoney);
+        //// TODO: apply commission
+
+        //if (returningMoney > 0)
+        //    await _inventoryProperties.DepositMoney(userId, returningMoney);
+
+        throw new NotImplementedException("CollectLot method is not implemented yet");
     }
 
     public async UnaryResult<BidDto> CreateBid(CreateBidDto request)
@@ -434,6 +480,21 @@ public class OrderBookService(AucyDbContext aucyDbContext,
     {
         var userId = Context.GetUserId();
 
+        var itemConfigFields = await _aucyDb.Bids
+            .Where(x => x.Id == request.BidId && x.ItemConfig != null)
+            .Select(x => new { x.ItemConfigId, x.ItemConfig.IsUnary })
+            .FirstOrDefaultAsync()
+                ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
+
+        SemaphoreSlim? matchingLock = null;
+
+        if (!itemConfigFields.IsUnary)
+        {
+            matchingLock = GetMatchingLock(itemConfigFields.ItemConfigId);
+
+            await matchingLock.WaitAsync();
+        }
+
         var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
         try
@@ -447,41 +508,39 @@ public class OrderBookService(AucyDbContext aucyDbContext,
                     ItemConfigWeight = b.ItemConfig.Weight,
                     b.TotalQuantity,
                     b.RemainingQuantity,
-                    b.BidPrice,
-                    b.ExtraBuyoutMoney
+                    b.BidPrice
                 })
                 .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound, "Bid doesn`t exist"));
 
-            var deletedBids = await _aucyDb.Bids
-                .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
-                .ExecuteDeleteAsync();
+            int bidsUpdated = 0;
 
-            if (deletedBids != 1)
+            if (bidFields.RemainingQuantity < bidFields.TotalQuantity) // If some items were bought, remove only unbought quantity
+            {
+                var remainingQuantity = bidFields.RemainingQuantity;
+                bidsUpdated = await _aucyDb.Bids
+                    .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                    .ExecuteUpdateAsync(x =>
+                    {
+                        x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - remainingQuantity)
+                            .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - remainingQuantity);
+                    });
+            }
+            else // all items are unsold, we can just delete the bid)
+            {
+                bidsUpdated = await _aucyDb.Bids
+                    .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                    .ExecuteDeleteAsync();
+            }
+
+            if (bidsUpdated != 1)
                 throw new RpcException(new Status(StatusCode.NotFound,
-                    $"Bid is not determined. Entries found: {deletedBids}"));
+                    $"Bid is not determined. Entries found: {bidsUpdated}"));
 
-            var returningMoney = checked(bidFields.BidPrice * bidFields.RemainingQuantity + bidFields.ExtraBuyoutMoney);
+            var returningMoney = checked(bidFields.BidPrice * bidFields.RemainingQuantity);
             if (returningMoney > 0)
                 await _inventoryProperties.DepositMoney(userId, returningMoney);
 
-            // If some items were bought
-            if (bidFields.RemainingQuantity < bidFields.TotalQuantity)
-            {
-                var boughtQuantity = bidFields.TotalQuantity - bidFields.RemainingQuantity;
-
-                // Try to update an existing ItemStack with the same ConfigId or create new one if not found
-                var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(bidFields.ItemConfigId,
-                    boughtQuantity, userId);
-
-                // Alter inventory UsedWeight
-                float usedWeightDiff = 0;
-
-                // Can be applied by parts in cycle if numbers are too big.
-                if (bidFields.ItemConfigWeight > 0)
-                    usedWeightDiff = checked(bidFields.ItemConfigWeight * boughtQuantity);
-
-                await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
-            }
+            // Bought items remain in bids. They will be collected by user manually.
 
             await transaction.CommitAsync();
 
@@ -503,6 +562,34 @@ public class OrderBookService(AucyDbContext aucyDbContext,
             throw new RpcException(new Status(StatusCode.Internal,
                 $"An error occurred while removing the bid: {ex.Message}"));
         }
+        finally
+        {
+            matchingLock?.Release();
+        }
+    }
+
+    public UnaryResult<BidDto> CollectBid(CollectBidDto request)
+    {
+        // If some items were bought
+        //if (bidFields.RemainingQuantity < bidFields.TotalQuantity)
+        //{
+        //    var boughtQuantity = bidFields.TotalQuantity - bidFields.RemainingQuantity;
+
+        //    // Try to update an existing ItemStack with the same ConfigId or create new one if not found
+        //    var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(bidFields.ItemConfigId,
+        //        boughtQuantity, userId);
+
+        //    // Alter inventory UsedWeight
+        //    float usedWeightDiff = 0;
+
+        //    // Can be applied by parts in cycle if numbers are too big.
+        //    if (bidFields.ItemConfigWeight > 0)
+        //        usedWeightDiff = checked(bidFields.ItemConfigWeight * boughtQuantity);
+
+        //    await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+        //}
+
+        throw new NotImplementedException();
     }
 
     private static SemaphoreSlim GetMatchingLock(Guid itemConfigId)
@@ -514,6 +601,7 @@ public class OrderBookService(AucyDbContext aucyDbContext,
     {
         while (lot.RemainingQuantity > 0)
         {
+            // TODO: repeat if any order was deleted
             var bids = await _aucyDb.Bids
                 .AsTracking()
                 .Where(x =>
@@ -539,6 +627,8 @@ public class OrderBookService(AucyDbContext aucyDbContext,
                 bid.RemainingQuantity -= tradeQuantity;
                 lot.RemainingQuantity -= tradeQuantity;
 
+                // Extra soldout money stores in lot.
+                // In case of changing commission user should deside when to take his money.
                 if (lot.UnitPrice < bid.BidPrice)
                     lot.ExtraSoldoutMoney += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
             }
@@ -552,8 +642,13 @@ public class OrderBookService(AucyDbContext aucyDbContext,
 
     private async Task MatchBidWithLots(Bid bid)
     {
+        /// Item can be bought with lower price than specified in <see cref="Bid.BidPrice"/> at the moment of bid creation. 
+        /// In this case, user will pay less money for the item. That difference will be stored here.
+        long refund = 0;
+
         while (bid.RemainingQuantity > 0)
         {
+            // TODO: repeat if any order was deleted
             var lots = await _aucyDb.Lots
                 .AsTracking()
                 .Where(x =>
@@ -567,7 +662,7 @@ public class OrderBookService(AucyDbContext aucyDbContext,
                 .ToListAsync();
 
             if (lots.Count == 0)
-                return;
+                break;
 
             foreach (var lot in lots)
             {
@@ -580,13 +675,17 @@ public class OrderBookService(AucyDbContext aucyDbContext,
                 bid.RemainingQuantity -= tradeQuantity;
 
                 if (bid.BidPrice > lot.UnitPrice)
-                    bid.ExtraBuyoutMoney += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
+                    refund += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
             }
 
             await _aucyDb.SaveChangesAsync();
 
             if (lots.Count < MatchingBatchSize)
-                return;
+                break;
         }
+
+        // No commission => instant money recovery
+        if (refund > 0)
+            await _inventoryProperties.DepositMoney(bid.BidderUserId, refund);
     }
 }
