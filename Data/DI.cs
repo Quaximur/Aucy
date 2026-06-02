@@ -18,5 +18,10 @@ public static class DI
             options.UseSqlServer(connectionString);
             //options.UseNpgsql(connectionString);
         });
+
+        builder.Services.AddDbContextFactory<AucyDbContext>(options =>
+        {
+            options.UseSqlServer(connectionString);
+        });
     }
 }
