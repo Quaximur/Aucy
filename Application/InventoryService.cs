@@ -1,4 +1,5 @@
-﻿using Aucy.Contracts.OnionContracts;
+﻿using Aucy.Application.Helpers;
+using Aucy.Contracts.OnionContracts;
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using AutoMapper;
@@ -9,7 +10,6 @@ using MessagePack;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
-using System.Security.Claims;
 
 namespace Aucy.Application;
 
@@ -30,7 +30,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
     public async UnaryResult<Nil> AddItemStack(AddItemStackDto request)
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
         var itemConfigId = request.ItemConfig.Id;
 
         if (request.Quantity <= 0)
@@ -113,7 +113,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
     public async UnaryResult<InventoryDto> CreateInventory(CreateInventoryDto request)
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
         var newInventory = new Inventory()
         {
             Id = userId,
@@ -138,7 +138,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
     public async UnaryResult<InventoryDto> GetOwnInventory(GetInventoryDto request)
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
 
         try
         {
@@ -178,7 +178,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
     public async UnaryResult<Nil> RemoveItemStack(RemoveItemStackDto request)
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
 
         // Block specified Inventory and ItemStack of a SINGLE User (it`s ok because other users don`t even use it)
         using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
@@ -242,18 +242,5 @@ public class InventoryService(AucyDbContext aucyDbContext,
     public UnaryResult<long> RemoveMoney(long moneyToTake)
     {
         throw new NotImplementedException();
-    }
-
-    private Guid GetUserIdFromContext()
-    {
-        var userIdText = Context.CallContext.GetHttpContext()?.User.FindFirstValue("user_id");
-
-        if (string.IsNullOrWhiteSpace(userIdText))
-            throw new RpcException(new Status(StatusCode.PermissionDenied, "Token is not valid"));
-
-        if (!Guid.TryParse(userIdText, out var userGuid))
-            throw new RpcException(new Status(StatusCode.PermissionDenied, "Token is not valid"));
-
-        return userGuid;
     }
 }

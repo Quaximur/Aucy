@@ -1,4 +1,5 @@
-﻿using Aucy.Contracts.OnionContracts;
+﻿using Aucy.Application.Helpers;
+using Aucy.Contracts.OnionContracts;
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using AutoMapper;
@@ -14,15 +15,17 @@ using System.Security.Claims;
 namespace Aucy.Application;
 
 [Authorize]
-public class AuctionService(AucyDbContext aucyDbContext,
+public class OrderBookService(AucyDbContext aucyDbContext,
     InventoryPropertiesService inventoryPropertiesService,
     ItemsService itemsService,
-    IMapper mapper) : ServiceBase<IAuctionService>,
+    IMapper mapper) : ServiceBase<IOrderBookService>,
 #pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
-    IAuctionService
+    IOrderBookService
 #pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
 {
     private const int MatchingBatchSize = 256;
+    
+    // TODO: Price predicate lock
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> MatchingLocks = new();
 
     private readonly AucyDbContext _aucyDb = aucyDbContext;
@@ -30,49 +33,9 @@ public class AuctionService(AucyDbContext aucyDbContext,
     private readonly ItemsService _itemsService = itemsService;
     private readonly IMapper _mapper = mapper;
 
-    public UnaryResult<ItemConfigWithRawListing> GetItemConfig(GetItemConfigDto request)
-    {
-        throw new NotImplementedException();
-    }
-
-    public UnaryResult<ItemConfigWithRichListing> GetRichItemConfig(GetItemConfigDto request)
-    {
-        throw new NotImplementedException();
-    }
-
-    public async UnaryResult<ItemConfigsDto> GetItemConfigs(GetItemConfigsDto request)
-    {
-        Console.WriteLine($"{nameof(GetItemConfigs)} request");
-
-        if (request.Page <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Page number should be greater than 0"));
-
-        if (request.PageSize <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Page size should be greater than 0"));
-
-        var query = _aucyDb.ItemConfigs.AsQueryable();
-
-        // TODO: process path filter correctly (e.g. with splitting by '>' and checking each part separately, or with regex)
-        // CAUTION: with substring filter, "Weapon>Sword" will also match "Weapon>SwordAndShield", which may not be desired
-        if (!string.IsNullOrWhiteSpace(request.CategoryPathFilter))
-            query = query.Where(x => x.CategoryPath.Contains(request.CategoryPathFilter, StringComparison.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(request.NameFilter))
-            query = query.Where(x => x.Name.Contains(request.NameFilter, StringComparison.OrdinalIgnoreCase));
-
-        var itemConfigsList = await query
-            .Where(x => !x.IsUnary || x.Lots.Any()) // No zombie configs
-            .Skip((request.Page - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .Select(x => _mapper.Map<ItemConfigDto>(x))
-            .ToListAsync();
-
-        return new ItemConfigsDto(itemConfigsList);
-    }
-
     public async UnaryResult<LotDto> CreateLot(CreateLotDto request)
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
 
         Console.WriteLine($"Creating lot request for user: {userId}");
 
@@ -228,7 +191,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
     public async UnaryResult<OwnLotsDto> GetOwnLots()
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
 
         var lotsWithItemConfigs = await _aucyDb.Lots
             .Where(l => l.OwnerUserId == userId)
@@ -241,7 +204,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
     public async UnaryResult<Guid> RemoveLot(RemoveLotDto request)
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
 
         var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
@@ -318,7 +281,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
     public async UnaryResult<BidDto> CreateBid(CreateBidDto request)
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
 
         if (request.BidPrice <= 0)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Bid price should be greater than 0"));
@@ -457,7 +420,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
     public async UnaryResult<OwnBidsDto> GetOwnBids()
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
 
         var ownBids = await _aucyDb.Bids
             .Where(b => b.BidderUserId == userId)
@@ -470,7 +433,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
     public async UnaryResult<Guid> RemoveBid(RemoveBidDto request)
     {
-        var userId = GetUserIdFromContext();
+        var userId = Context.GetUserId();
 
         var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 

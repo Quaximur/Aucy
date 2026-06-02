@@ -2,7 +2,7 @@
 using Grpc.Core;
 using Microsoft.EntityFrameworkCore;
 
-namespace Aucy.Application;
+namespace Aucy.Application.Helpers;
 
 public class InventoryPropertiesService(AucyDbContext aucyDbContext)
 {

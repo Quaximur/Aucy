@@ -1,18 +1,13 @@
 ﻿using Aucy.Data;
 using Aucy.Domain.Entities;
-using AutoMapper;
 using Grpc.Core;
 using Microsoft.EntityFrameworkCore;
 
-namespace Aucy.Application;
+namespace Aucy.Application.Helpers;
 
-public class ItemsService(AucyDbContext aucyDbContext,
-    InventoryPropertiesService inventoryPropertiesService,
-    IMapper mapper)
+public class ItemsService(AucyDbContext aucyDbContext)
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
-    private readonly InventoryPropertiesService _inventoryPropertiesService = inventoryPropertiesService;
-    private readonly IMapper _mapper = mapper;
 
     public async Task<int> UpsertItemStack(Guid itemConfigId, int quantity, Guid inventoryId)
     {

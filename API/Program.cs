@@ -1,6 +1,7 @@
 using Aucy.API.Extensions;
 using Aucy.Application;
 using Aucy.Application.Auth;
+using Aucy.Application.Helpers;
 using Aucy.Application.Mappings;
 using Aucy.Data;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -65,7 +66,8 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapMagicOnionService<AuctionService>();
+app.MapMagicOnionService<OrderBookService>();
 app.MapMagicOnionService<InventoryService>();
+app.MapMagicOnionService<ItemSearchService>();
 
 app.Run();
