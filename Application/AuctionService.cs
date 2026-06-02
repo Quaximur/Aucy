@@ -7,6 +7,7 @@ using MagicOnion;
 using MagicOnion.Server;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using System.Collections.Concurrent;
 using System.Data;
 using System.Security.Claims;
 
@@ -21,6 +22,9 @@ public class AuctionService(AucyDbContext aucyDbContext,
     IAuctionService
 #pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
 {
+    private const int MatchingBatchSize = 256;
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> MatchingLocks = new();
+
     private readonly AucyDbContext _aucyDb = aucyDbContext;
     private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
     private readonly ItemsService _itemsService = itemsService;
@@ -94,8 +98,11 @@ public class AuctionService(AucyDbContext aucyDbContext,
     {
         var itemConfig = request.ItemConfig;
         var itemConfigId = itemConfig.Id;
+        var matchingLock = GetMatchingLock(itemConfigId);
 
-        using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await matchingLock.WaitAsync();
+
+        using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
         try
         {
@@ -128,17 +135,17 @@ public class AuctionService(AucyDbContext aucyDbContext,
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
 
             // TIP: If you don`t want to create lot after instant soldout,
-            // when you have to validate inventory properties
+            // then you have to validate inventory properties
             var lot = Lot.Create(ownerUserId: userId,
                 itemConfigId: itemConfigId,
                 unitPrice: request.UnitPrice,
                 totalQuantity: request.TotalQuantity);
 
-            //await MatchLotWithBids(lot);
+            await MatchLotWithBids(lot);
 
             _aucyDb.Lots.Add(lot);
 
-            await _aucyDb.SaveChangesAsync(); // + Trigger
+            await _aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
             Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
@@ -153,15 +160,17 @@ public class AuctionService(AucyDbContext aucyDbContext,
         catch (RpcException)
         {
             await transaction.RollbackAsync();
-            // TODO: try repeat
             throw;
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync();
-            // TODO: try repeat
             throw new RpcException(new Status(StatusCode.Internal,
                 $"An error occurred while creating the lot: {ex.Message}"));
+        }
+        finally
+        {
+            matchingLock.Release();
         }
     }
 
@@ -331,7 +340,11 @@ public class AuctionService(AucyDbContext aucyDbContext,
 
     private async UnaryResult<BidDto> BuyNonUnary(Guid userId, CreateBidDto request)
     {
-        using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var matchingLock = GetMatchingLock(request.ItemConfigId);
+
+        await matchingLock.WaitAsync();
+
+        using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
         try
         {
@@ -351,7 +364,7 @@ public class AuctionService(AucyDbContext aucyDbContext,
                 bidPrice: request.BidPrice,
                 totalQuantity: request.TotalQuantity);
 
-            //await MatchBidWithLots(bid);
+            await MatchBidWithLots(bid);
 
             _aucyDb.Bids.Add(bid);
 
@@ -375,6 +388,10 @@ public class AuctionService(AucyDbContext aucyDbContext,
             await transaction.RollbackAsync();
             throw new RpcException(new Status(StatusCode.Internal,
                 $"An error occurred while creating the bid: {ex.Message}"));
+        }
+        finally
+        {
+            matchingLock.Release();
         }
     }
 
@@ -539,59 +556,88 @@ public class AuctionService(AucyDbContext aucyDbContext,
         return userGuid;
     }
 
+    private static SemaphoreSlim GetMatchingLock(Guid itemConfigId)
+    {
+        return MatchingLocks.GetOrAdd(itemConfigId, _ => new SemaphoreSlim(1, 1));
+    }
+
     private async Task MatchLotWithBids(Lot lot)
     {
-        // TODO: optimize. ExecuteUpdate. Take by parts mb.
-        var bids = await _aucyDb.Bids
-            .AsTracking()
-            .Where(x =>
-                x.ItemConfigId == lot.ItemConfigId &&
-                x.RemainingQuantity > 0 &&
-                x.BidPrice >= lot.UnitPrice)
-            .OrderByDescending(x => x.BidPrice)
-            .ThenBy(x => x.CreatedAt) // TODO: random order
-            .ToListAsync();
-
-        foreach (var bid in bids)
+        while (lot.RemainingQuantity > 0)
         {
-            if (lot.RemainingQuantity == 0)
-                break;
+            var bids = await _aucyDb.Bids
+                .AsTracking()
+                .Where(x =>
+                    x.ItemConfigId == lot.ItemConfigId &&
+                    x.RemainingQuantity > 0 &&
+                    x.BidPrice >= lot.UnitPrice)
+                .OrderByDescending(x => x.BidPrice)
+                .ThenBy(x => x.CreatedAt)
+                //.ThenBy(x => x.Id)
+                .Take(MatchingBatchSize)
+                .ToListAsync();
 
-            var tradeQuantity = Math.Min(lot.RemainingQuantity, bid.RemainingQuantity);
+            if (bids.Count == 0)
+                return;
 
-            bid.RemainingQuantity -= tradeQuantity;
-            lot.RemainingQuantity -= tradeQuantity;
+            foreach (var bid in bids)
+            {
+                if (lot.RemainingQuantity == 0)
+                    break;
 
-            if (lot.UnitPrice < bid.BidPrice)
-                lot.ExtraSoldoutMoney += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
+                var tradeQuantity = Math.Min(lot.RemainingQuantity, bid.RemainingQuantity);
+
+                bid.RemainingQuantity -= tradeQuantity;
+                lot.RemainingQuantity -= tradeQuantity;
+
+                if (lot.UnitPrice < bid.BidPrice)
+                    lot.ExtraSoldoutMoney += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
+            }
+
+            await _aucyDb.SaveChangesAsync();
+
+            if (bids.Count < MatchingBatchSize)
+                return;
         }
     }
 
     private async Task MatchBidWithLots(Bid bid)
     {
-        // TODO: optimize. ExecuteUpdate. Take by parts mb.
-        var lots = await _aucyDb.Lots
-            .AsTracking()
-            .Where(x =>
-                x.ItemConfigId == bid.ItemConfigId &&
-                x.RemainingQuantity > 0 &&
-                x.UnitPrice <= bid.BidPrice)
-            .OrderBy(x => x.UnitPrice)
-            .ThenBy(x => x.CreatedAt) // TODO: random order
-            .ToListAsync();
-
-        foreach (var lot in lots)
+        while (bid.RemainingQuantity > 0)
         {
-            if (bid.RemainingQuantity == 0)
-                break;
+            var lots = await _aucyDb.Lots
+                .AsTracking()
+                .Where(x =>
+                    x.ItemConfigId == bid.ItemConfigId &&
+                    x.RemainingQuantity > 0 &&
+                    x.UnitPrice <= bid.BidPrice)
+                .OrderBy(x => x.UnitPrice)
+                .ThenBy(x => x.CreatedAt)
+                //.ThenBy(x => x.Id)
+                .Take(MatchingBatchSize)
+                .ToListAsync();
 
-            var tradeQuantity = Math.Min(bid.RemainingQuantity, lot.RemainingQuantity);
+            if (lots.Count == 0)
+                return;
 
-            lot.RemainingQuantity -= tradeQuantity;
-            bid.RemainingQuantity -= tradeQuantity;
+            foreach (var lot in lots)
+            {
+                if (bid.RemainingQuantity == 0)
+                    break;
 
-            if (bid.BidPrice > lot.UnitPrice)
-                bid.ExtraBuyoutMoney += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
+                var tradeQuantity = Math.Min(bid.RemainingQuantity, lot.RemainingQuantity);
+
+                lot.RemainingQuantity -= tradeQuantity;
+                bid.RemainingQuantity -= tradeQuantity;
+
+                if (bid.BidPrice > lot.UnitPrice)
+                    bid.ExtraBuyoutMoney += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
+            }
+
+            await _aucyDb.SaveChangesAsync();
+
+            if (lots.Count < MatchingBatchSize)
+                return;
         }
     }
 }
