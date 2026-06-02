@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Data;
-using System.Security.Claims;
 
 namespace Aucy.Application;
 
@@ -504,19 +503,6 @@ public class OrderBookService(AucyDbContext aucyDbContext,
             throw new RpcException(new Status(StatusCode.Internal,
                 $"An error occurred while removing the bid: {ex.Message}"));
         }
-    }
-
-    private Guid GetUserIdFromContext()
-    {
-        var userIdText = Context.CallContext.GetHttpContext()?.User.FindFirstValue("user_id");
-
-        if (string.IsNullOrWhiteSpace(userIdText))
-            throw new RpcException(new Status(StatusCode.PermissionDenied, "Token is not valid"));
-
-        if (!Guid.TryParse(userIdText, out var userGuid))
-            throw new RpcException(new Status(StatusCode.PermissionDenied, "Token is not valid"));
-
-        return userGuid;
     }
 
     private static SemaphoreSlim GetMatchingLock(Guid itemConfigId)
