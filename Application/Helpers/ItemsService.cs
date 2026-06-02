@@ -9,7 +9,7 @@ public class ItemsService(AucyDbContext aucyDbContext)
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
 
-    public async Task<int> UpsertItemStack(Guid itemConfigId, int quantity, Guid inventoryId)
+    public async Task<int> UpdateOrInsertItemStack(Guid itemConfigId, int quantity, Guid inventoryId)
     {
         // Try to update an existing ItemStack with the same ConfigId or create new one if not found
         var usedCapacityDiff = 0;
@@ -36,7 +36,7 @@ public class ItemsService(AucyDbContext aucyDbContext)
         return usedCapacityDiff;
     }
 
-    public async Task<int> UpleteItemStack(Guid itemConfigId, int quantity, Guid inventoryId)
+    public async Task<int> UpdateOrDeleteItemStack(Guid itemConfigId, int quantity, Guid inventoryId)
     {
         // Reduce the quantity or remove the ItemStack
         var usedCapacityDiff = 0;

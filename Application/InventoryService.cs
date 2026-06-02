@@ -84,7 +84,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
             }
 
             // Try to update an existing ItemStack with the same ConfigId or create new one if not found
-            var usedCapacityDiff = await _itemsService.UpsertItemStack(itemConfig.Id, request.Quantity,
+            var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(itemConfig.Id, request.Quantity,
                 inventoryFields.Id);
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);

@@ -85,7 +85,7 @@ public class OrderBookService(AucyDbContext aucyDbContext,
                     "There are not enough items in your inventory"));
 
             // Reduce the quantity or remove the ItemStack
-            var usedCapacityDiff = await _itemsService.UpleteItemStack(itemConfigId, request.TotalQuantity, userId);
+            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(itemConfigId, request.TotalQuantity, userId);
 
             // Alter inventory UsedWeight
             float usedWeightDiff = 0;
@@ -145,7 +145,7 @@ public class OrderBookService(AucyDbContext aucyDbContext,
 
         try
         {
-            var usedCapacityDiff = await _itemsService.UpleteItemStack(request.ItemConfig.Id, 1, userId);
+            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(request.ItemConfig.Id, 1, userId);
 
             // Alter inventory UsedWeight
             float usedWeightDiff = 0;
@@ -243,7 +243,7 @@ public class OrderBookService(AucyDbContext aucyDbContext,
             if (lotFields.RemainingQuantity > 0)
             {
                 // Try to update an existing ItemStack with the same ConfigId or create new one if not found
-                var usedCapacityDiff = await _itemsService.UpsertItemStack(lotFields.ItemConfigId,
+                var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(lotFields.ItemConfigId,
                     lotFields.RemainingQuantity, userId);
 
                 // Alter inventory UsedWeight
@@ -470,7 +470,7 @@ public class OrderBookService(AucyDbContext aucyDbContext,
                 var boughtQuantity = bidFields.TotalQuantity - bidFields.RemainingQuantity;
 
                 // Try to update an existing ItemStack with the same ConfigId or create new one if not found
-                var usedCapacityDiff = await _itemsService.UpsertItemStack(bidFields.ItemConfigId,
+                var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(bidFields.ItemConfigId,
                     boughtQuantity, userId);
 
                 // Alter inventory UsedWeight
