@@ -8,7 +8,6 @@ using Grpc.Core;
 using MagicOnion;
 using MagicOnion.Server;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Polly;
 using Polly.Retry;
@@ -77,84 +76,87 @@ public class OrderBookService(
 
     public async UnaryResult<LotDto> SellNonUnary(Guid userId, CreateLotDto request)
     {
-        var itemConfig = request.ItemConfig;
-        var itemConfigId = itemConfig.Id;
-        var matchingLock = GetMatchingLock(itemConfigId);
-
-        await matchingLock.WaitAsync();
-
-        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
-
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
-
-        try
+        return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            var lotExists = await aucyDb.Lots.AnyAsync(l =>
-                l.OwnerUserId == userId &&
-                l.ItemConfigId == itemConfigId);
+            var itemConfig = request.ItemConfig;
+            var itemConfigId = itemConfig.Id;
+            var matchingLock = GetMatchingLock(itemConfigId);
 
-            if (lotExists)
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "You already have a lot with this item"));
+            await matchingLock.WaitAsync();
 
-            // Check items existence and quantity in inventory
-            var itemStack = await aucyDb.ItemStacks
-                .Where(s => s.InventoryId == userId &&
-                    s.ConfigId == itemConfigId &&
-                    s.Quantity >= request.TotalQuantity)
-                .Select(s => new { s.Id, s.InventoryId, s.ConfigId, s.Quantity })
-                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.InvalidArgument,
-                    "There are not enough items in your inventory"));
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-            // Reduce the quantity or remove the ItemStack
-            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(itemConfigId, request.TotalQuantity, userId);
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
-            // Alter inventory UsedWeight
-            float usedWeightDiff = 0;
+            try
+            {
+                var lotExists = await aucyDb.Lots.AnyAsync(l =>
+                    l.OwnerUserId == userId &&
+                    l.ItemConfigId == itemConfigId);
 
-            // Can be applied by parts in cycle if numbers are too big.
-            if (itemConfig.Weight > 0)
-                usedWeightDiff = checked(-itemConfig.Weight * request.TotalQuantity);
+                if (lotExists)
+                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You already have a lot with this item"));
 
-            await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+                // Check items existence and quantity in inventory
+                var itemStack = await aucyDb.ItemStacks
+                    .Where(s => s.InventoryId == userId &&
+                        s.ConfigId == itemConfigId &&
+                        s.Quantity >= request.TotalQuantity)
+                    .Select(s => new { s.Id, s.InventoryId, s.ConfigId, s.Quantity })
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument,
+                        "There are not enough items in your inventory"));
 
-            // TIP: If you don`t want to create lot after instant soldout,
-            // then you have to validate inventory properties
-            var lot = Lot.Create(ownerUserId: userId,
-                itemConfigId: itemConfigId,
-                unitPrice: request.UnitPrice,
-                totalQuantity: request.TotalQuantity);
+                // Reduce the quantity or remove the ItemStack
+                var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(itemConfigId, request.TotalQuantity, userId);
 
-            await MatchLotWithBids(lot, aucyDb);
+                // Alter inventory UsedWeight
+                float usedWeightDiff = 0;
 
-            aucyDb.Lots.Add(lot);
+                // Can be applied by parts in cycle if numbers are too big.
+                if (itemConfig.Weight > 0)
+                    usedWeightDiff = checked(-itemConfig.Weight * request.TotalQuantity);
 
-            await aucyDb.SaveChangesAsync();
-            await transaction.CommitAsync();
+                await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
 
-            Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
+                // TIP: If you don`t want to create lot after instant soldout,
+                // then you have to validate inventory properties
+                var lot = Lot.Create(ownerUserId: userId,
+                    itemConfigId: itemConfigId,
+                    unitPrice: request.UnitPrice,
+                    totalQuantity: request.TotalQuantity);
 
-            return _mapper.Map<LotDto>(lot);
-        }
-        catch (OverflowException)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Lot total width is too large"));
-        }
-        catch (RpcException)
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal,
-                $"An error occurred while creating the lot: {ex.Message}"));
-        }
-        finally
-        {
-            matchingLock.Release();
-        }
+                await MatchLotWithBids(lot, aucyDb);
+
+                aucyDb.Lots.Add(lot);
+
+                await aucyDb.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
+
+                return _mapper.Map<LotDto>(lot);
+            }
+            catch (OverflowException)
+            {
+                await transaction.RollbackAsync();
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Lot total width is too large"));
+            }
+            catch (RpcException)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"An error occurred while creating the lot: {ex.Message}"));
+            }
+            finally
+            {
+                matchingLock.Release();
+            }
+        });
     }
 
     public async UnaryResult<LotDto> SellUnary(Guid userId, CreateLotDto request)
@@ -162,53 +164,56 @@ public class OrderBookService(
         if (request.TotalQuantity != 1)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be 1 for unary item"));
 
-        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
-
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
-
-        try
+        return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(request.ItemConfig.Id, 1, userId);
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-            // Alter inventory UsedWeight
-            float usedWeightDiff = 0;
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
-            // Can be applied by parts in cycle if numbers are too large.
-            if (request.ItemConfig.Weight > 0)
-                usedWeightDiff = checked(-request.ItemConfig.Weight * request.TotalQuantity);
+            try
+            {
+                var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(request.ItemConfig.Id, 1, userId);
 
-            await _inventoryProperties.ExecuteInventoryUpdate(userId, weightDiff: usedWeightDiff,
-                capacityDiff: usedCapacityDiff);
+                // Alter inventory UsedWeight
+                float usedWeightDiff = 0;
 
-            // No mathing with bids for Unary items
-            var lot = Lot.Create(ownerUserId: userId,
-                itemConfigId: request.ItemConfig.Id,
-                unitPrice: request.UnitPrice,
-                totalQuantity: request.TotalQuantity);
+                // Can be applied by parts in cycle if numbers are too large.
+                if (request.ItemConfig.Weight > 0)
+                    usedWeightDiff = checked(-request.ItemConfig.Weight * request.TotalQuantity);
 
-            aucyDb.Add(lot);
+                await _inventoryProperties.ExecuteInventoryUpdate(userId, weightDiff: usedWeightDiff,
+                    capacityDiff: usedCapacityDiff);
 
-            await aucyDb.SaveChangesAsync();
-            await transaction.CommitAsync();
+                // No mathing with bids for Unary items
+                var lot = Lot.Create(ownerUserId: userId,
+                    itemConfigId: request.ItemConfig.Id,
+                    unitPrice: request.UnitPrice,
+                    totalQuantity: request.TotalQuantity);
 
-            return _mapper.Map<LotDto>(lot);
-        }
-        catch (OverflowException)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Lot total price is too large"));
-        }
-        catch (RpcException)
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal,
-                $"An error occurred while creating the bid: {ex.Message}"));
-        }
+                aucyDb.Add(lot);
+
+                await aucyDb.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return _mapper.Map<LotDto>(lot);
+            }
+            catch (OverflowException)
+            {
+                await transaction.RollbackAsync();
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Lot total price is too large"));
+            }
+            catch (RpcException)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"An error occurred while creating the bid: {ex.Message}"));
+            }
+        });
     }
 
     public async UnaryResult<OwnLotsDto> GetOwnLots()
@@ -380,61 +385,64 @@ public class OrderBookService(
 
     private async UnaryResult<BidDto> BuyNonUnary(Guid userId, CreateBidDto request)
     {
-        var matchingLock = GetMatchingLock(request.ItemConfigId);
-
-        await matchingLock.WaitAsync();
-
-        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
-
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
-
-        try
+        return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            var bidExists = await aucyDb.Bids.AnyAsync(b =>
-                b.BidderUserId == userId &&
-                b.ItemConfigId == request.ItemConfigId);
+            var matchingLock = GetMatchingLock(request.ItemConfigId);
 
-            if (bidExists)
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "You already have a bid with this item"));
+            await matchingLock.WaitAsync();
 
-            var reservedMoney = checked(request.BidPrice * request.TotalQuantity);
-            await _inventoryProperties.WithdrawMoney(userId, reservedMoney);
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-            var bid = Bid.Create(
-                bidderUserId: userId,
-                itemConfigId: request.ItemConfigId,
-                bidPrice: request.BidPrice,
-                totalQuantity: request.TotalQuantity);
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
-            await MatchBidWithLots(bid, aucyDb);
+            try
+            {
+                var bidExists = await aucyDb.Bids.AnyAsync(b =>
+                    b.BidderUserId == userId &&
+                    b.ItemConfigId == request.ItemConfigId);
 
-            aucyDb.Bids.Add(bid);
+                if (bidExists)
+                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You already have a bid with this item"));
 
-            await aucyDb.SaveChangesAsync(); // + Trigger
-            await transaction.CommitAsync();
+                var reservedMoney = checked(request.BidPrice * request.TotalQuantity);
+                await _inventoryProperties.WithdrawMoney(userId, reservedMoney);
 
-            return _mapper.Map<BidDto>(bid);
-        }
-        catch (OverflowException)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Bid total price is too large"));
-        }
-        catch (RpcException)
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal,
-                $"An error occurred while creating the bid: {ex.Message}"));
-        }
-        finally
-        {
-            matchingLock.Release();
-        }
+                var bid = Bid.Create(
+                    bidderUserId: userId,
+                    itemConfigId: request.ItemConfigId,
+                    bidPrice: request.BidPrice,
+                    totalQuantity: request.TotalQuantity);
+
+                await MatchBidWithLots(bid, aucyDb);
+
+                aucyDb.Bids.Add(bid);
+
+                await aucyDb.SaveChangesAsync(); // + Trigger
+                await transaction.CommitAsync();
+
+                return _mapper.Map<BidDto>(bid);
+            }
+            catch (OverflowException)
+            {
+                await transaction.RollbackAsync();
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Bid total price is too large"));
+            }
+            catch (RpcException)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"An error occurred while creating the bid: {ex.Message}"));
+            }
+            finally
+            {
+                matchingLock.Release();
+            }
+        });
     }
 
     private async UnaryResult<BidDto> BuyUnary(Guid userId, CreateBidDto request)
@@ -442,61 +450,64 @@ public class OrderBookService(
         if (request.TotalQuantity != 1)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be 1 for unary item"));
 
-        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
-
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
-
-        try
+        return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            var lotFields = await aucyDb.Lots
-                .Where(l => l.ItemConfigId == request.ItemConfigId && l.RemainingQuantity > 0)
-                .Select(l => new
-                {
-                    l.Id,
-                    l.UnitPrice
-                })
-                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
-                    "No lots available for this item")); // No lot matching for unary items
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-            if (lotFields.UnitPrice != request.BidPrice)
-                throw new RpcException(new Status(StatusCode.InvalidArgument,
-                    "Bid price should be equal to lot price for unary item"));
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
-            await _inventoryProperties.WithdrawMoney(userId, lotFields.UnitPrice);
+            try
+            {
+                var lotFields = await aucyDb.Lots
+                    .Where(l => l.ItemConfigId == request.ItemConfigId && l.RemainingQuantity > 0)
+                    .Select(l => new
+                    {
+                        l.Id,
+                        l.UnitPrice
+                    })
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
+                        "No lots available for this item")); // No lot matching for unary items
 
-            var updatedLots = await aucyDb.Lots.Where(x => x.Id == lotFields.Id)
-                .ExecuteUpdateAsync(x => x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - 1));
+                if (lotFields.UnitPrice != request.BidPrice)
+                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument,
+                        "Bid price should be equal to lot price for unary item"));
 
-            if (updatedLots != 1)
-                throw new RpcException(new Status(StatusCode.NotFound,
-                    $"Lot is not determined. Entries found: {updatedLots}"));
+                await _inventoryProperties.WithdrawMoney(userId, lotFields.UnitPrice);
 
-            var bid = Bid.Create(
-                bidderUserId: userId,
-                itemConfigId: request.ItemConfigId,
-                bidPrice: request.BidPrice,
-                totalQuantity: 1);
+                var updatedLots = await aucyDb.Lots.Where(x => x.Id == lotFields.Id)
+                    .ExecuteUpdateAsync(x => x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - 1));
 
-            bid.RemainingQuantity = 0;
+                if (updatedLots != 1)
+                    throw new RpcException(new Status(StatusCode.NotFound,
+                        $"Lot is not determined. Entries found: {updatedLots}"));
 
-            aucyDb.Bids.Add(bid);
+                var bid = Bid.Create(
+                    bidderUserId: userId,
+                    itemConfigId: request.ItemConfigId,
+                    bidPrice: request.BidPrice,
+                    totalQuantity: 1);
 
-            await aucyDb.SaveChangesAsync();
-            await transaction.CommitAsync();
+                bid.RemainingQuantity = 0;
 
-            return _mapper.Map<BidDto>(bid);
-        }
-        catch (RpcException)
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal,
-                $"An error occurred while creating the bid: {ex.Message}"));
-        }
+                aucyDb.Bids.Add(bid);
+
+                await aucyDb.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return _mapper.Map<BidDto>(bid);
+            }
+            catch (RpcException)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"An error occurred while creating the bid: {ex.Message}"));
+            }
+        });
     }
 
     public async UnaryResult<OwnBidsDto> GetOwnBids()
@@ -518,94 +529,97 @@ public class OrderBookService(
     {
         var userId = Context.GetUserId();
 
-        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
-
-        var itemConfigFields = await aucyDb.Bids
-            .Where(x => x.Id == request.BidId && x.ItemConfig != null)
-            .Select(x => new { x.ItemConfigId, x.ItemConfig.IsUnary })
-            .FirstOrDefaultAsync()
-                ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
-
-        SemaphoreSlim? matchingLock = null;
-
-        if (!itemConfigFields.IsUnary)
+        return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            matchingLock = GetMatchingLock(itemConfigFields.ItemConfigId);
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-            await matchingLock.WaitAsync();
-        }
+            var itemConfigFields = await aucyDb.Bids
+                .Where(x => x.Id == request.BidId && x.ItemConfig != null)
+                .Select(x => new { x.ItemConfigId, x.ItemConfig.IsUnary })
+                .FirstOrDefaultAsync()
+                    ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
-        var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+            SemaphoreSlim? matchingLock = null;
 
-        try
-        {
-            var bidFields = await aucyDb.Bids
-                .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
-                .Select(b => new
-                {
-                    b.Id,
-                    b.ItemConfigId,
-                    ItemConfigWeight = b.ItemConfig.Weight,
-                    b.TotalQuantity,
-                    b.RemainingQuantity,
-                    b.BidPrice
-                })
-                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound, "Bid doesn`t exist"));
-
-            int bidsUpdated = 0;
-
-            if (bidFields.RemainingQuantity < bidFields.TotalQuantity) // If some items were bought, remove only unbought quantity
+            if (!itemConfigFields.IsUnary)
             {
-                var remainingQuantity = bidFields.RemainingQuantity;
-                bidsUpdated = await aucyDb.Bids
+                matchingLock = GetMatchingLock(itemConfigFields.ItemConfigId);
+
+                await matchingLock.WaitAsync();
+            }
+
+            var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+
+            try
+            {
+                var bidFields = await aucyDb.Bids
                     .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
-                    .ExecuteUpdateAsync(x =>
+                    .Select(b => new
                     {
-                        x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - remainingQuantity)
-                            .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - remainingQuantity);
-                    });
+                        b.Id,
+                        b.ItemConfigId,
+                        ItemConfigWeight = b.ItemConfig.Weight,
+                        b.TotalQuantity,
+                        b.RemainingQuantity,
+                        b.BidPrice
+                    })
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Bid doesn`t exist"));
+
+                int bidsUpdated = 0;
+
+                if (bidFields.RemainingQuantity < bidFields.TotalQuantity) // If some items were bought, remove only unbought quantity
+                {
+                    var remainingQuantity = bidFields.RemainingQuantity;
+                    bidsUpdated = await aucyDb.Bids
+                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                        .ExecuteUpdateAsync(x =>
+                        {
+                            x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - remainingQuantity)
+                                .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - remainingQuantity);
+                        });
+                }
+                else // all items are unsold, we can just delete the bid)
+                {
+                    bidsUpdated = await aucyDb.Bids
+                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                        .ExecuteDeleteAsync();
+                }
+
+                if (bidsUpdated != 1)
+                    throw new RpcException(new Status(StatusCode.NotFound,
+                        $"Bid is not determined. Entries found: {bidsUpdated}"));
+
+                var returningMoney = checked(bidFields.BidPrice * bidFields.RemainingQuantity);
+                if (returningMoney > 0)
+                    await _inventoryProperties.DepositMoney(userId, returningMoney);
+
+                // Bought items remain in bids. They will be collected by user manually.
+
+                await transaction.CommitAsync();
+
+                return request.BidId;
             }
-            else // all items are unsold, we can just delete the bid)
+            catch (OverflowException)
             {
-                bidsUpdated = await aucyDb.Bids
-                    .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
-                    .ExecuteDeleteAsync();
+                await transaction.RollbackAsync();
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Returning amount is too large"));
             }
-
-            if (bidsUpdated != 1)
-                throw new RpcException(new Status(StatusCode.NotFound,
-                    $"Bid is not determined. Entries found: {bidsUpdated}"));
-
-            var returningMoney = checked(bidFields.BidPrice * bidFields.RemainingQuantity);
-            if (returningMoney > 0)
-                await _inventoryProperties.DepositMoney(userId, returningMoney);
-
-            // Bought items remain in bids. They will be collected by user manually.
-
-            await transaction.CommitAsync();
-
-            return request.BidId;
-        }
-        catch (OverflowException)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Returning amount is too large"));
-        }
-        catch (RpcException)
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal,
-                $"An error occurred while removing the bid: {ex.Message}"));
-        }
-        finally
-        {
-            matchingLock?.Release();
-        }
+            catch (RpcException)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"An error occurred while removing the bid: {ex.Message}"));
+            }
+            finally
+            {
+                matchingLock?.Release();
+            }
+        });
     }
 
     public UnaryResult<BidDto> CollectBid(CollectBidDto request)
