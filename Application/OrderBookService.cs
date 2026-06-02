@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Polly;
+using Polly.Retry;
 using System.Collections.Concurrent;
 using System.Data;
 
@@ -229,11 +230,7 @@ public class OrderBookService(
     {
         var userId = Context.GetUserId();
 
-        var retryPolicy = Policy
-            .Handle<Exception>(ex => ex is not NoRetryRpcException)
-            .RetryAsync(3);
-
-        return await retryPolicy.ExecuteAsync(async () =>
+        return await GetRetryPolicy().ExecuteAsync(async () =>
         {
             using var aucyDb = _aucyDbFactory.CreateDbContext();
 
@@ -730,5 +727,12 @@ public class OrderBookService(
         // No commission => instant money recovery
         if (refund > 0)
             await _inventoryProperties.DepositMoney(bid.BidderUserId, refund);
+    }
+
+    private AsyncRetryPolicy GetRetryPolicy()
+    {
+        return Policy
+            .Handle<Exception>(ex => ex is not NoRetryRpcException)
+            .RetryAsync(3);
     }
 }
