@@ -243,7 +243,7 @@ public class OrderBookService(
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            using var aucyDb = _aucyDbFactory.CreateDbContext();
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
             var itemConfigFields = await aucyDb.Lots
                 .Where(x => x.Id == request.LotId && x.ItemConfig != null)
@@ -343,50 +343,104 @@ public class OrderBookService(
 
     public async UnaryResult<Guid> CollectLot(CollectLotDto request)
     {
-        throw new NotImplementedException();
-        //var userId = Context.GetUserId();
+        var userId = Context.GetUserId();
 
-        //if (request.Quantity <= 0)
-        //    throw new RpcException(new Status(StatusCode.InvalidArgument, "Quantity should be greater than 0"));
+        if (request.Quantity <= 0)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Quantity should be greater than 0"));
 
-        //using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
+        return await GetRetryPolicy().ExecuteAsync(async () =>
+        {
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        //return await GetRetryPolicy().ExecuteAsync(async () =>
-        //{
+            var itemConfigFields = await aucyDb.Lots
+                .Where(x => x.Id == request.LotId && x.ItemConfig != null)
+                .Select(x => new { x.ItemConfig.IsUnary })
+                .FirstOrDefaultAsync()
+                        ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
+            var matchingLock = GetMatchingLockWithUnary(request.LotId, itemConfigFields.IsUnary);
 
-        //    try
-        //    {
-        //        using var aucyDb = _aucyDbFactory.CreateDbContext();
-        //        var lotFields = await aucyDb.Lots
-        //            .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
-        //            .Select(b => new
-        //            {
-        //                b.Id,
-        //                b.ItemConfigId,
-        //                ItemConfigWeight = b.ItemConfig.Weight,
-        //                b.TotalQuantity,
-        //                b.RemainingQuantity,
-        //                b.UnitPrice,
-        //                b.ExtraSoldoutMoney
-        //            })
-        //            .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Lot doesn`t exist"));
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //    }
-        //});
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
+            try
+            {
+                var lotFields = await aucyDb.Lots
+                    .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                    .Select(b => new
+                    {
+                        b.Id,
+                        b.ItemConfigId,
+                        ItemConfigWeight = b.ItemConfig.Weight,
+                        b.TotalQuantity,
+                        b.RemainingQuantity,
+                        b.UnitPrice,
+                        b.ExtraSoldoutMoney
+                    })
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Lot doesn`t exist"));
 
-        //var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+                if (lotFields.RemainingQuantity == lotFields.TotalQuantity)
+                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "There are no sold items in the lot"));
 
-        //var soldQuantity = lotFields.TotalQuantity - lotFields.RemainingQuantity;
+                if (request.Quantity > lotFields.RemainingQuantity)
+                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Requested quantity exceeds the sold quantity in the lot"));
 
-        //var returningMoney = checked(lotFields.UnitPrice * soldQuantity + lotFields.ExtraSoldoutMoney);
-        //// TODO: apply commission
+                if (request.Quantity < lotFields.RemainingQuantity)
+                {
+                    var takeQuantity = request.Quantity;
+                    var updatedLots = await aucyDb.Lots
+                        .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                        .ExecuteUpdateAsync(x =>
+                        {
+                            x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - takeQuantity)
+                                .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
+                        });
 
-        //if (returningMoney > 0)
-        //    await _inventoryProperties.DepositMoney(userId, returningMoney);
+                    if (updatedLots != 1)
+                        throw new RpcException(new Status(StatusCode.NotFound,
+                            $"Lot is not determined. Entries found: {updatedLots}"));
+                }
+                else
+                {
+                    var updatedLots = await aucyDb.Lots
+                        .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                        .ExecuteDeleteAsync();
+
+                    if (updatedLots != 1)
+                        throw new RpcException(new Status(StatusCode.NotFound,
+                            $"Lot is not determined. Entries found: {updatedLots}"));
+                }
+
+                var soldQuantity = lotFields.TotalQuantity - lotFields.RemainingQuantity;
+
+                var returningMoney = checked(lotFields.UnitPrice * soldQuantity + lotFields.ExtraSoldoutMoney);
+                // TODO: apply commission
+
+                if (returningMoney > 0)
+                    await _inventoryProperties.DepositMoney(userId, returningMoney);
+
+                return request.LotId;
+            }
+            catch (OverflowException)
+            {
+                await transaction.RollbackAsync();
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Amount is too large"));
+            }
+            catch (RpcException)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"An error occurred while collecting the lot: {ex.Message}"));
+            }
+            finally
+            {
+                ReleaseMatchingLockWithUnary(matchingLock, request.LotId, itemConfigFields.IsUnary);
+            }
+        });
     }
 
     public async UnaryResult<BidDto> CreateBid(CreateBidDto request)
@@ -663,28 +717,116 @@ public class OrderBookService(
         });
     }
 
-    public UnaryResult<BidDto> CollectBid(CollectBidDto request)
+    public async UnaryResult<Guid> CollectBid(CollectBidDto request)
     {
-        // If some items were bought
-        //if (bidFields.RemainingQuantity < bidFields.TotalQuantity)
-        //{
-        //    var boughtQuantity = bidFields.TotalQuantity - bidFields.RemainingQuantity;
+        var userId = Context.GetUserId();
 
-        //    // Try to update an existing ItemStack with the same ConfigId or create new one if not found
-        //    var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(bidFields.ItemConfigId,
-        //        boughtQuantity, userId);
+        if (request.Quantity <= 0)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Quantity should be greater than 0"));
 
-        //    // Alter inventory UsedWeight
-        //    float usedWeightDiff = 0;
+        return await GetRetryPolicy().ExecuteAsync(async () =>
+        {
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        //    // Can be applied by parts in cycle if numbers are too big.
-        //    if (bidFields.ItemConfigWeight > 0)
-        //        usedWeightDiff = checked(bidFields.ItemConfigWeight * boughtQuantity);
+            var itemConfigFields = await aucyDb.Bids
+                .Where(x => x.Id == request.BidId && x.ItemConfig != null)
+                .Select(x => new { x.ItemConfig.IsUnary })
+                .FirstOrDefaultAsync()
+                    ?? throw new RpcException(new Status(StatusCode.NotFound, "Bid doesn't exist"));
 
-        //    await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
-        //}
+            var matchingLock = GetMatchingLockWithUnary(request.BidId, itemConfigFields.IsUnary);
 
-        throw new NotImplementedException();
+            await matchingLock.WaitAsync();
+
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+
+            try
+            {
+                var bidFields = await aucyDb.Bids
+                    .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                    .Select(b => new
+                    {
+                        b.Id,
+                        b.ItemConfigId,
+                        ItemConfigWeight = b.ItemConfig.Weight,
+                        b.TotalQuantity,
+                        b.RemainingQuantity,
+                        b.BidPrice
+                    })
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Bid doesn't exist"));
+
+                // Check if any items were bought
+                if (bidFields.RemainingQuantity == bidFields.TotalQuantity)
+                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "There are no purchased items in the bid"));
+
+                var boughtQuantity = bidFields.TotalQuantity - bidFields.RemainingQuantity;
+
+                if (request.Quantity > boughtQuantity)
+                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Requested quantity exceeds the purchased quantity in the bid"));
+
+                int bidsUpdated;
+
+                if (request.Quantity < boughtQuantity)
+                {
+                    var takeQuantity = request.Quantity;
+
+                    bidsUpdated = await aucyDb.Bids
+                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                        .ExecuteUpdateAsync(x =>
+                        {
+                            x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - takeQuantity)
+                                .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
+                        });
+                }
+                else
+                {
+                    // Collect all purchased items - delete the bid entirely
+                    bidsUpdated = await aucyDb.Bids
+                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                        .ExecuteDeleteAsync();
+                }
+
+                if (bidsUpdated != 1)
+                    throw new RpcException(new Status(StatusCode.NotFound,
+                        $"Bid is not determined. Entries found: {bidsUpdated}"));
+
+                // Add purchased items to user's inventory
+                var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(bidFields.ItemConfigId,
+                    boughtQuantity, userId);
+
+                // Alter inventory UsedWeight
+                float usedWeightDiff = 0;
+
+                if (bidFields.ItemConfigWeight > 0)
+                    usedWeightDiff = checked(bidFields.ItemConfigWeight * boughtQuantity);
+
+                await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+
+                await transaction.CommitAsync();
+
+                return request.BidId;
+            }
+            catch (OverflowException)
+            {
+                await transaction.RollbackAsync();
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Amount is too large"));
+            }
+            catch (RpcException)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"An error occurred while collecting the bid: {ex.Message}"));
+            }
+            finally
+            {
+                ReleaseMatchingLockWithUnary(matchingLock, request.BidId, itemConfigFields.IsUnary);
+            }
+        });
     }
 
     private static SemaphoreSlim GetMatchingLock(Guid itemConfigId)
