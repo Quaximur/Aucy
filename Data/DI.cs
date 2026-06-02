@@ -17,7 +17,7 @@ public static class DI
         {
             options.UseSqlServer(connectionString);
             //options.UseNpgsql(connectionString);
-        });
+        }, optionsLifetime: ServiceLifetime.Singleton);
 
         builder.Services.AddDbContextFactory<AucyDbContext>(options =>
         {

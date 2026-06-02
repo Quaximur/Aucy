@@ -100,7 +100,7 @@ public class OrderBookService(
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
         try
         {
@@ -175,7 +175,7 @@ public class OrderBookService(
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
         try
         {
@@ -259,7 +259,7 @@ public class OrderBookService(
                 await matchingLock.WaitAsync();
             }
 
-            var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+            var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
             try
             {
@@ -360,7 +360,7 @@ public class OrderBookService(
 
             var matchingLock = GetMatchingLockWithUnary(request.LotId, itemConfigFields.IsUnary);
 
-            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
             try
             {
@@ -496,7 +496,7 @@ public class OrderBookService(
     {
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
         try
         {
@@ -550,7 +550,7 @@ public class OrderBookService(
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
         try
         {
@@ -643,7 +643,7 @@ public class OrderBookService(
                 await matchingLock.WaitAsync();
             }
 
-            var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+            var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
             try
             {
@@ -738,7 +738,7 @@ public class OrderBookService(
 
             await matchingLock.WaitAsync();
 
-            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
             try
             {
