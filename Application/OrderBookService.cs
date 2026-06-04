@@ -33,12 +33,6 @@ public class OrderBookService(
 {
     private const int MatchingBatchSize = 256;
 
-    /// <summary>
-    /// Operations locking for NonUnary items mathing (by ItemConfig.Id).
-    /// </summary>
-    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> MatchingLocks = new(); // TODO: Price predicate lock
-    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> UnaryMatchingLocks = new(); // TODO: Price predicate lock
-
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
     private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
     private readonly ItemsService _itemsService = itemsService;
@@ -71,46 +65,33 @@ public class OrderBookService(
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            var matchingLock = GetMatchingLockWithUnary(request.ItemConfig.Id, itemConfigFields.IsUnary);
-
-            await matchingLock.WaitAsync();
-
-            try
-            {
-                var ownBidExists = await aucyDb.Bids.AnyAsync(l =>
-                    l.BidderUserId == userId &&
-                    l.ItemConfigId == request.ItemConfig.Id);
-
-                if (ownBidExists)
-                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You can`t create a lot for the item you are buying"));
-
-                if (itemConfigFields.IsUnary)
-                    return await SellUnary(userId, request);
-                else
-                    return await SellNonUnary(userId, request);
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-            finally
-            {
-                ReleaseMatchingLockWithUnary(matchingLock, request.ItemConfig.Id, itemConfigFields.IsUnary);
-            }
+            if (!itemConfigFields.IsUnary)
+                return await SellNonUnary(userId, request, aucyDb);
+            else
+                return await SellUnary(userId, request, aucyDb);
         });
     }
 
-    public async UnaryResult<LotDto> SellNonUnary(Guid userId, CreateLotDto request)
+    public async UnaryResult<LotDto> SellNonUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb)
     {
         var itemConfig = request.ItemConfig;
         var itemConfigId = itemConfig.Id;
 
-        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
+        using var userLock = await _lockProvider.AcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigId, userId));
+
+        using var rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(request.ItemConfig.Id));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
         try
         {
+            var ownBidExists = await aucyDb.Bids.AnyAsync(l =>
+                    l.BidderUserId == userId &&
+                    l.ItemConfigId == request.ItemConfig.Id);
+
+            if (ownBidExists)
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You can`t create a lot for the item you are buying"));
+
             var lotExists = await aucyDb.Lots.AnyAsync(l =>
             l.OwnerUserId == userId &&
             l.ItemConfigId == itemConfigId);
@@ -175,17 +156,26 @@ public class OrderBookService(
         }
     }
 
-    public async UnaryResult<LotDto> SellUnary(Guid userId, CreateLotDto request)
+    public async UnaryResult<LotDto> SellUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb)
     {
         if (request.TotalQuantity != 1)
             throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be 1 for unary item"));
 
-        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
+        // throw because only one user can sell it`s Unary item
+        using var unaryLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryLock(request.ItemConfig.Id))
+            ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Failed to acquire user lock"));
 
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        using var transaction = await aucyDb.Database.BeginTransactionAsync();
 
         try
         {
+            var ownBidExists = await aucyDb.Bids.AnyAsync(l =>
+                l.BidderUserId == userId &&
+                l.ItemConfigId == request.ItemConfig.Id);
+
+            if (ownBidExists)
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You can`t create a lot for the item you are buying"));
+
             var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(request.ItemConfig.Id, 1, userId);
 
             // Alter inventory UsedWeight
@@ -258,11 +248,22 @@ public class OrderBookService(
                 .FirstOrDefaultAsync()
                     ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
+            IDistributedSynchronizationHandle? userLock = null;
             IDistributedSynchronizationHandle? rwItemLock = null;
+            IDistributedSynchronizationHandle? unaryLock = null;
 
             // wait for matching worker if not unary
             if (!itemConfigFields.IsUnary)
+            {
+                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryLock(itemConfigFields.ItemConfigId))
+                    ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Failed to acquire user lock"));
+
                 rwItemLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigFields.ItemConfigId));
+            }
+            else
+            {
+                unaryLock = await _lockProvider.AcquireLockAsync(Keys.GetUnaryLock(itemConfigFields.ItemConfigId));
+            }
 
             var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -343,6 +344,10 @@ public class OrderBookService(
             {
                 if (rwItemLock != null)
                     await rwItemLock.DisposeAsync();
+                if (unaryLock != null)
+                    await unaryLock.DisposeAsync();
+                if (userLock != null)
+                    await userLock.DisposeAsync();
             }
         });
     }
@@ -360,11 +365,15 @@ public class OrderBookService(
 
             var itemConfigFields = await aucyDb.Lots
                 .Where(x => x.Id == request.LotId && x.ItemConfig != null)
-                .Select(x => new { x.ItemConfig.IsUnary })
+                .Select(x => new { x.ItemConfig.IsUnary, x.ItemConfigId })
                 .FirstOrDefaultAsync()
                         ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
-            var matchingLock = GetMatchingLockWithUnary(request.LotId, itemConfigFields.IsUnary);
+            // No worker lock needed (diffs application works fine)
+            // No Unary lock needed (concurrent deletion guard implemented + nothing to buy)
+            IDistributedSynchronizationHandle? userLock = null;
+            if (!itemConfigFields.IsUnary)
+                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId));
 
             using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -387,10 +396,12 @@ public class OrderBookService(
                 if (lotFields.RemainingQuantity == lotFields.TotalQuantity)
                     throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "There are no sold items in the lot"));
 
-                if (request.Quantity > lotFields.RemainingQuantity)
+                var soldQuantity = lotFields.TotalQuantity - lotFields.RemainingQuantity;
+
+                if (request.Quantity > soldQuantity)
                     throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Requested quantity exceeds the sold quantity in the lot"));
 
-                if (request.Quantity < lotFields.RemainingQuantity)
+                if (request.Quantity < soldQuantity)
                 {
                     var takeQuantity = request.Quantity;
                     var updatedLots = await aucyDb.Lots
@@ -405,8 +416,9 @@ public class OrderBookService(
                         throw new RpcException(new Status(StatusCode.NotFound,
                             $"Lot is not determined. Entries found: {updatedLots}"));
                 }
-                else
+                else // lot is sold
                 {
+                    // Auto throw if Unary item multiple requests
                     var updatedLots = await aucyDb.Lots
                         .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
                         .ExecuteDeleteAsync();
@@ -415,8 +427,6 @@ public class OrderBookService(
                         throw new RpcException(new Status(StatusCode.NotFound,
                             $"Lot is not determined. Entries found: {updatedLots}"));
                 }
-
-                var soldQuantity = lotFields.TotalQuantity - lotFields.RemainingQuantity;
 
                 var returningMoney = checked(lotFields.UnitPrice * soldQuantity + lotFields.ExtraSoldoutMoney);
                 // TODO: apply commission
@@ -444,7 +454,8 @@ public class OrderBookService(
             }
             finally
             {
-                ReleaseMatchingLockWithUnary(matchingLock, request.LotId, itemConfigFields.IsUnary);
+                if (userLock != null)
+                    await userLock.DisposeAsync();
             }
         });
     }
@@ -469,43 +480,32 @@ public class OrderBookService(
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            var matchingLock = GetMatchingLockWithUnary(request.ItemConfigId, itemConfigFields.IsUnary);
-
-            await matchingLock.WaitAsync();
-
-            try
-            {
-                var ownLotExists = await aucyDb.Lots.AnyAsync(l =>
-                    l.OwnerUserId == userId &&
-                    l.ItemConfigId == request.ItemConfigId);
-
-                if (ownLotExists)
-                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You can`t create a bid for the item you are selling"));
-
-                if (itemConfigFields.IsUnary)
-                    return await BuyUnary(userId, request);
-                else
-                    return await BuyNonUnary(userId, request);
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-            finally
-            {
-                ReleaseMatchingLockWithUnary(matchingLock, request.ItemConfigId, itemConfigFields.IsUnary);
-            }
+            if (!itemConfigFields.IsUnary)
+                return await BuyNonUnary(userId, request, aucyDb);
+            else
+                return await BuyUnary(userId, request, aucyDb);
         });
     }
 
-    private async UnaryResult<BidDto> BuyNonUnary(Guid userId, CreateBidDto request)
+    private async UnaryResult<BidDto> BuyNonUnary(Guid userId, CreateBidDto request, AucyDbContext aucyDb)
     {
-        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
+        var itemConfigId = request.ItemConfigId;
+
+        using var userLock = await _lockProvider.AcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigId, userId));
+
+        using var rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigId));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
         try
         {
+            var ownLotExists = await aucyDb.Lots.AnyAsync(l =>
+                        l.OwnerUserId == userId &&
+                        l.ItemConfigId == request.ItemConfigId);
+
+            if (ownLotExists)
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You can`t create a bid for the item you are selling"));
+
             var bidExists = await aucyDb.Bids.AnyAsync(b =>
                 b.BidderUserId == userId &&
                 b.ItemConfigId == request.ItemConfigId);
@@ -549,17 +549,24 @@ public class OrderBookService(
         }
     }
 
-    private async UnaryResult<BidDto> BuyUnary(Guid userId, CreateBidDto request)
+    private async UnaryResult<BidDto> BuyUnary(Guid userId, CreateBidDto request, AucyDbContext aucyDb)
     {
         if (request.TotalQuantity != 1)
             throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be 1 for unary item"));
 
-        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
+        using var unaryLock = await _lockProvider.AcquireLockAsync(Keys.GetUnaryLock(request.ItemConfigId));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
         try
         {
+            var ownLotExists = await aucyDb.Lots.AnyAsync(l =>
+                    l.OwnerUserId == userId &&
+                    l.ItemConfigId == request.ItemConfigId);
+
+            if (ownLotExists)
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You can`t create a bid for the item you are selling"));
+
             var lotFields = await aucyDb.Lots
                 .Where(l => l.ItemConfigId == request.ItemConfigId && l.RemainingQuantity > 0)
                 .Select(l => new
@@ -626,7 +633,7 @@ public class OrderBookService(
         return new OwnBidsDto(ownBids);
     }
 
-    public async UnaryResult<Guid> RemoveBid(RemoveBidDto request)
+    public async UnaryResult<Guid> RemoveBid(RemoveBidDto request) // TODO: continue with locks
     {
         var userId = Context.GetUserId();
 
@@ -640,13 +647,11 @@ public class OrderBookService(
                 .FirstOrDefaultAsync()
                     ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
-            SemaphoreSlim? matchingLock = null;
+            IDistributedSynchronizationHandle? rwLock = null;
 
             if (!itemConfigFields.IsUnary)
             {
-                matchingLock = GetMatchingLock(itemConfigFields.ItemConfigId);
-
-                await matchingLock.WaitAsync();
+                rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigFields.ItemConfigId));
             }
 
             var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
@@ -718,7 +723,8 @@ public class OrderBookService(
             }
             finally
             {
-                matchingLock?.Release();
+                if (rwLock != null)
+                    await rwLock.DisposeAsync();
             }
         });
     }
@@ -740,9 +746,12 @@ public class OrderBookService(
                 .FirstOrDefaultAsync()
                     ?? throw new RpcException(new Status(StatusCode.NotFound, "Bid doesn't exist"));
 
-            var matchingLock = GetMatchingLockWithUnary(request.BidId, itemConfigFields.IsUnary);
-
-            await matchingLock.WaitAsync();
+            // For Unary items, no lock needed
+            IDistributedSynchronizationHandle? rwLock = null;
+            if (!itemConfigFields.IsUnary)
+            {
+                rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(request.BidId));
+            }
 
             using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -830,31 +839,10 @@ public class OrderBookService(
             }
             finally
             {
-                ReleaseMatchingLockWithUnary(matchingLock, request.BidId, itemConfigFields.IsUnary);
+                if (rwLock != null)
+                    await rwLock.DisposeAsync();
             }
         });
-    }
-
-    private static SemaphoreSlim GetMatchingLock(Guid itemConfigId)
-    {
-        return MatchingLocks.GetOrAdd(itemConfigId, _ => new SemaphoreSlim(1, 1));
-    }
-
-    private static SemaphoreSlim GetMatchingLockWithUnary(Guid itemConfigId, bool isUnary)
-    {
-        if (isUnary)
-            return UnaryMatchingLocks.GetOrAdd(itemConfigId, _ => new SemaphoreSlim(1, 1));
-
-        return MatchingLocks.GetOrAdd(itemConfigId, _ => new SemaphoreSlim(1, 1));
-    }
-
-
-    private static void ReleaseMatchingLockWithUnary(SemaphoreSlim semaphore, Guid itemConfigId, bool isUnary)
-    {
-        if (isUnary)
-            UnaryMatchingLocks.Remove(itemConfigId, out _);
-
-        semaphore.Release();
     }
 
     private async Task MatchLotWithBids(Lot lot, AucyDbContext aucyDb)
