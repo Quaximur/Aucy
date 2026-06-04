@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Aucy.Data.Migrations
 {
     [DbContext(typeof(AucyDbContext))]
-    [Migration("20260602194232_init")]
+    [Migration("20260604155924_init")]
     partial class init
     {
         /// <inheritdoc />
@@ -39,6 +39,9 @@ namespace Aucy.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsMatched")
+                        .HasColumnType("bit");
 
                     b.Property<Guid>("ItemConfigId")
                         .HasColumnType("uniqueidentifier");
@@ -93,9 +96,9 @@ namespace Aucy.Data.Migrations
 
                             t.HasCheckConstraint("CK_TEntity_Money", "\"Money\" >= 0");
 
-                            t.HasCheckConstraint("CK_TEntity_UsedCapacity", "\"UsedCapacity\" >= 0");
+                            t.HasCheckConstraint("CK_TEntity_UsedCapacity", "\"UsedCapacity\" <= [Capacity]");
 
-                            t.HasCheckConstraint("CK_TEntity_UsedWeight", "\"UsedWeight\" >= 0");
+                            t.HasCheckConstraint("CK_TEntity_UsedWeight", "\"UsedWeight\" <= [WeightLimit]");
 
                             t.HasCheckConstraint("CK_TEntity_WeightLimit", "\"WeightLimit\" >= 0");
                         });
@@ -188,6 +191,9 @@ namespace Aucy.Data.Migrations
 
                     b.Property<long>("ExtraSoldoutMoney")
                         .HasColumnType("bigint");
+
+                    b.Property<bool>("IsMatched")
+                        .HasColumnType("bit");
 
                     b.Property<Guid>("ItemConfigId")
                         .HasColumnType("uniqueidentifier");

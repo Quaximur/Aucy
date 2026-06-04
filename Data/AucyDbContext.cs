@@ -1,5 +1,6 @@
 ﻿using Aucy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection.Emit;
 
 namespace Aucy.Data;
 
@@ -85,21 +86,23 @@ public class AucyDbContext : DbContext
             .HasForeignKey(x => x.InventoryId);
 
         // Check constraints
-        builder.HasCheckConstraint<Lot>(nameof(Lot.UnitPrice), ">= 1");
-        builder.HasCheckConstraint<Lot>(nameof(Lot.TotalQuantity), ">= 1");
-        builder.HasCheckConstraint<Lot>(nameof(Lot.RemainingQuantity), ">= 0");
-        builder.HasCheckConstraint<Lot>(nameof(Lot.ExtraSoldoutMoney), ">= 0");
+        builder.HasCheckConstraint<Lot>("UnitPrice", ">= 1");
+        builder.HasCheckConstraint<Lot>("TotalQuantity", ">= 1");
+        builder.HasCheckConstraint<Lot>("RemainingQuantity", ">= 0");
+        builder.HasCheckConstraint<Lot>("ExtraSoldoutMoney", ">= 0");
 
-        builder.HasCheckConstraint<Bid>(nameof(Bid.BidPrice), ">= 1");
-        builder.HasCheckConstraint<Bid>(nameof(Bid.TotalQuantity), ">= 1");
-        builder.HasCheckConstraint<Bid>(nameof(Bid.RemainingQuantity), ">= 0");
+        builder.HasCheckConstraint<Bid>("BidPrice", ">= 1");
+        builder.HasCheckConstraint<Bid>("TotalQuantity", ">= 1");
+        builder.HasCheckConstraint<Bid>("RemainingQuantity", ">= 0");
 
-        builder.HasCheckConstraint<ItemStack>(nameof(ItemStack.Quantity), ">= 1");
+        builder.HasCheckConstraint<ItemStack>("Quantity", ">= 1");
 
-        builder.HasCheckConstraint<Inventory>(nameof(Inventory.Money), ">= 0");
-        builder.HasCheckConstraint<Inventory>(nameof(Inventory.Capacity), ">= 0");
-        builder.HasCheckConstraint<Inventory>(nameof(Inventory.UsedCapacity), ">= 0");
-        builder.HasCheckConstraint<Inventory>(nameof(Inventory.WeightLimit), ">= 0");
-        builder.HasCheckConstraint<Inventory>(nameof(Inventory.UsedWeight), ">= 0");
+        builder.HasCheckConstraint<Inventory>("Money", ">= 0");
+        builder.HasCheckConstraint<Inventory>("Capacity", ">= 0");
+        builder.HasCheckConstraint<Inventory>("UsedCapacity", ">= 0");
+        builder.HasCheckConstraint<Inventory>("UsedCapacity", "<= [Capacity]");
+        builder.HasCheckConstraint<Inventory>("WeightLimit", ">= 0");
+        builder.HasCheckConstraint<Inventory>("UsedWeight", ">= 0");
+        builder.HasCheckConstraint<Inventory>("UsedWeight", "<= [WeightLimit]");
     }
 }

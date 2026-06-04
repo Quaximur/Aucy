@@ -27,8 +27,8 @@ namespace Aucy.Data.Migrations
                     table.PrimaryKey("PK_Inventories", x => x.Id);
                     table.CheckConstraint("CK_TEntity_Capacity", "\"Capacity\" >= 0");
                     table.CheckConstraint("CK_TEntity_Money", "\"Money\" >= 0");
-                    table.CheckConstraint("CK_TEntity_UsedCapacity", "\"UsedCapacity\" >= 0");
-                    table.CheckConstraint("CK_TEntity_UsedWeight", "\"UsedWeight\" >= 0");
+                    table.CheckConstraint("CK_TEntity_UsedCapacity", "\"UsedCapacity\" <= [Capacity]");
+                    table.CheckConstraint("CK_TEntity_UsedWeight", "\"UsedWeight\" <= [WeightLimit]");
                     table.CheckConstraint("CK_TEntity_WeightLimit", "\"WeightLimit\" >= 0");
                 });
 
@@ -62,6 +62,7 @@ namespace Aucy.Data.Migrations
                     BidPrice = table.Column<long>(type: "bigint", nullable: false),
                     TotalQuantity = table.Column<int>(type: "int", nullable: false),
                     RemainingQuantity = table.Column<int>(type: "int", nullable: false),
+                    IsMatched = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
@@ -121,6 +122,7 @@ namespace Aucy.Data.Migrations
                     UnitPrice = table.Column<long>(type: "bigint", nullable: false),
                     TotalQuantity = table.Column<int>(type: "int", nullable: false),
                     RemainingQuantity = table.Column<int>(type: "int", nullable: false),
+                    IsMatched = table.Column<bool>(type: "bit", nullable: false),
                     ExtraSoldoutMoney = table.Column<long>(type: "bigint", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
