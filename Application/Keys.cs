@@ -16,4 +16,9 @@ public static class Keys
     /// Queue for user individual operations with non-unary items processing (like buying/selling non-unary items, etc.)
     /// </summary>
     public static string GetNonUnaryUserLock(Guid itemConfigId, Guid userId) => $"item_non_unary_user_{itemConfigId}_{userId}";
+
+    /// <summary>
+    /// Queue for user individual operations with unary items processing
+    /// </summary>
+    public static string GetUnaryUserLock(Guid itemConfigId, Guid userId) => $"item_unary_user_{itemConfigId}_{userId}";
 }
