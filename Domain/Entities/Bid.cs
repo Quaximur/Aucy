@@ -31,6 +31,7 @@ public class Bid
 
     [Range(0, int.MaxValue)]
     public int RemainingQuantity { get; set; }
+    public bool IsMatched { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public static Bid Create(Guid bidderUserId, Guid itemConfigId,

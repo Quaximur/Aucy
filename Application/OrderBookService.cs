@@ -7,10 +7,13 @@ using AutoMapper;
 using Grpc.Core;
 using MagicOnion;
 using MagicOnion.Server;
+using Medallion.Threading;
+using Medallion.Threading.Redis;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Polly;
 using Polly.Retry;
+using StackExchange.Redis;
 using System.Collections.Concurrent;
 using System.Data;
 
@@ -21,7 +24,9 @@ public class OrderBookService(
     InventoryPropertiesService inventoryPropertiesService,
     ItemsService itemsService,
     IDbContextFactory<AucyDbContext> aucyDbFactory,
-    IMapper mapper) : ServiceBase<IOrderBookService>,
+    IMapper mapper,
+    IDistributedReaderWriterLockProvider rwLockProvider,
+    IDistributedLockProvider lockProvider) : ServiceBase<IOrderBookService>,
 #pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
     IOrderBookService
 #pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
@@ -38,6 +43,8 @@ public class OrderBookService(
     private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
     private readonly ItemsService _itemsService = itemsService;
     private readonly IMapper _mapper = mapper;
+    private readonly IDistributedLockProvider _lockProvider = lockProvider;
+    private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
 
     public async UnaryResult<LotDto> CreateLot(CreateLotDto request)
     {
@@ -139,7 +146,7 @@ public class OrderBookService(
                 unitPrice: request.UnitPrice,
                 totalQuantity: request.TotalQuantity);
 
-            await MatchLotWithBids(lot, aucyDb);
+            //await MatchLotWithBids(lot, aucyDb);
 
             aucyDb.Lots.Add(lot);
 
@@ -251,13 +258,11 @@ public class OrderBookService(
                 .FirstOrDefaultAsync()
                     ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
-            SemaphoreSlim? matchingLock = null;
+            IDistributedSynchronizationHandle? rwItemLock = null;
 
+            // wait for matching worker if not unary
             if (!itemConfigFields.IsUnary)
-            {
-                matchingLock = GetMatchingLock(itemConfigFields.ItemConfigId);
-                await matchingLock.WaitAsync();
-            }
+                rwItemLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigFields.ItemConfigId));
 
             var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -336,7 +341,8 @@ public class OrderBookService(
             }
             finally
             {
-                matchingLock?.Release();
+                if (rwItemLock != null)
+                    await rwItemLock.DisposeAsync();
             }
         });
     }
@@ -516,11 +522,11 @@ public class OrderBookService(
                 bidPrice: request.BidPrice,
                 totalQuantity: request.TotalQuantity);
 
-            await MatchBidWithLots(bid, aucyDb);
+            //await MatchBidWithLots(bid, aucyDb);
 
             aucyDb.Bids.Add(bid);
 
-            await aucyDb.SaveChangesAsync(); // + Trigger
+            await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
             return _mapper.Map<BidDto>(bid);

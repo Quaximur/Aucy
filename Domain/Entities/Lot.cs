@@ -22,6 +22,7 @@ public class Lot
 
     [Range(0, int.MaxValue)]
     public int RemainingQuantity { get; set; }
+    public bool IsMatched { get; set; }
 
     /// <summary>
     /// Item can be sold with higher price than specified in <see cref="UnitPrice"/> at the moment of lot creation. 
