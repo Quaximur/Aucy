@@ -21,16 +21,15 @@ services:
     redis:
         container_name: redis
         image: redis:7.4-alpine
-        environment:
-            REDIS_PASSWORD: "${REDIS_PASSWORD:-YourStrong!Passw0rd}"
         volumes:
             - redis_data:/data
         ports:
-            - "${REDISL_PORT:-6379}:6379"
+            - "${REDIS_PORT:-6379}:6379"
+        environment:
+            - REDIS_ARGS=--requirepass ${REDIS_PASSWORD:-YourStrong!Passw0rd} --appendonly yes
         restart: unless-stopped
-        command: redis-server --requirepass ${REDIS_PASSWORD:-YourStrong!Passw0rd} --appendonly yes
         
 volumes:
     mssql_data:
     redis_data:
-      # driver: local
+        driver: local

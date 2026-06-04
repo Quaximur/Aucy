@@ -8,13 +8,10 @@ using Grpc.Core;
 using MagicOnion;
 using MagicOnion.Server;
 using Medallion.Threading;
-using Medallion.Threading.Redis;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Polly;
 using Polly.Retry;
-using StackExchange.Redis;
-using System.Collections.Concurrent;
 using System.Data;
 
 namespace Aucy.Application;
@@ -400,7 +397,7 @@ public class OrderBookService(
                     Keys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId);
 
             using var userLock = await _lockProvider.TryAcquireLockAsync(userLockKey)
-                ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, 
+                ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
                     "Some of your operations with this item is already processing"));
 
             using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
@@ -429,7 +426,7 @@ public class OrderBookService(
 
                 if (takeQuantity > soldQuantity)
                     throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Requested quantity exceeds the sold quantity in the lot"));
-                
+
                 if (takeQuantity < soldQuantity)
                 {
                     var updatedLots = await aucyDb.Lots

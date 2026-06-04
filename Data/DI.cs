@@ -37,10 +37,16 @@ public static class DI
         builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
             ConnectionMultiplexer.Connect(redisConnectionString));
 
-        builder.Services.AddSingleton<IDistributedLockProvider>(sp =>
+        builder.Services.AddSingleton<RedisDistributedSynchronizationProvider>(sp =>
         {
             var connection = sp.GetRequiredService<IConnectionMultiplexer>();
             return new RedisDistributedSynchronizationProvider(connection.GetDatabase());
         });
+
+        builder.Services.AddSingleton<IDistributedLockProvider>(sp =>
+            sp.GetRequiredService<RedisDistributedSynchronizationProvider>());
+
+        builder.Services.AddSingleton<IDistributedReaderWriterLockProvider>(sp =>
+            sp.GetRequiredService<RedisDistributedSynchronizationProvider>());
     }
 }
