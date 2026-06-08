@@ -1,5 +1,5 @@
 ﻿using Aucy.Application.Helpers;
-using Aucy.Contracts.OnionContracts;
+using Aucy.Contracts.OnionServer;
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using AutoMapper;
@@ -111,6 +111,11 @@ public class InventoryService(AucyDbContext aucyDbContext,
         throw new NotImplementedException();
     }
 
+    public UnaryResult<long> RemoveMoney(long moneyToTake)
+    {
+        throw new NotImplementedException();
+    }
+
     public async UnaryResult<InventoryDto> CreateInventory(CreateInventoryDto request)
     {
         var userId = Context.GetUserId();
@@ -134,46 +139,6 @@ public class InventoryService(AucyDbContext aucyDbContext,
             UsedWeight = newInventory.UsedWeight,
             ItemStacks = []
         };
-    }
-
-    public async UnaryResult<InventoryDto> GetOwnInventory(GetInventoryDto request)
-    {
-        var userId = Context.GetUserId();
-
-        try
-        {
-            var inventory = await _aucyDb.Inventories
-                .Where(x => x.Id == userId)
-                .Select(x => new InventoryDto
-                {
-                    Capacity = x.Capacity,
-                    UsedCapacity = x.UsedCapacity,
-                    WeightLimit = x.WeightLimit,
-                    UsedWeight = x.UsedWeight,
-                    ItemStacks = x.ItemStacks
-                        .Skip((request.Page - 1) * request.PageSize)
-                        .Take(request.PageSize)
-                        .Select(i => new ItemStackDto
-                        {
-                            ItemConfig = _mapper.Map<ItemConfigDto>(i.Config),
-                            Quantity = i.Quantity,
-                        })
-                        .ToArray()
-                })
-                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
-                    "Inventory doesn't exist"));
-
-            return inventory;
-        }
-        catch (RpcException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new RpcException(new Status(StatusCode.Internal,
-                $"Failed to get inventory: {ex.Message}"));
-        }
     }
 
     public async UnaryResult<Nil> RemoveItemStack(RemoveItemStackDto request)
@@ -237,10 +202,5 @@ public class InventoryService(AucyDbContext aucyDbContext,
             throw new RpcException(new Status(StatusCode.Internal,
                 $"Failed to remove item stack: {ex.Message}"));
         }
-    }
-
-    public UnaryResult<long> RemoveMoney(long moneyToTake)
-    {
-        throw new NotImplementedException();
     }
 }

@@ -1,5 +1,5 @@
 ﻿using AutoMapper;
-using Aucy.Contracts.OnionContracts;
+using Aucy.Contracts.OnionClient;
 using Aucy.Domain.Entities;
 
 namespace Aucy.Application.Mappings

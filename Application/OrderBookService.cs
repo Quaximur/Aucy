@@ -1,6 +1,6 @@
 ﻿using Aucy.Application.Exceptions;
 using Aucy.Application.Helpers;
-using Aucy.Contracts.OnionContracts;
+using Aucy.Contracts.OnionClient;
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using AutoMapper;
@@ -49,34 +49,31 @@ public class OrderBookService(
         if (request.TotalQuantity <= 0)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be greater than 0"));
 
-        if (request.ItemConfig == null)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Item config should be provided"));
-
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
         var itemConfigFields = await aucyDb.ItemConfigs
-            .Where(x => x.Id == request.ItemConfig.Id)
-            .Select(x => new { x.IsUnary })
+            .Where(x => x.Id == request.ItemConfigId)
+            .Select(x => new { x.IsUnary, x.Weight })
             .FirstOrDefaultAsync()
                     ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
             if (!itemConfigFields.IsUnary)
-                return await SellNonUnary(userId, request, aucyDb);
+                return await SellNonUnary(userId, request, aucyDb, itemConfigFields.Weight);
             else
-                return await SellUnary(userId, request, aucyDb);
+                return await SellUnary(userId, request, aucyDb, itemConfigFields.Weight);
         });
     }
 
-    public async UnaryResult<LotDto> SellNonUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb)
+    public async UnaryResult<LotDto> SellNonUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, float itemWeight)
     {
-        var itemConfig = request.ItemConfig;
-        var itemConfigId = itemConfig.Id;
+        var itemConfigId = request.ItemConfigId;
 
-        using var userLock = await _lockProvider.AcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigId, userId));
+		using var userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigId, userId))
+			?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Some of your operations with this item is already processing"));
 
-        using var rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(request.ItemConfig.Id));
+		using var rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigId));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -84,7 +81,7 @@ public class OrderBookService(
         {
             var ownBidExists = await aucyDb.Bids.AnyAsync(l =>
                     l.BidderUserId == userId &&
-                    l.ItemConfigId == request.ItemConfig.Id);
+                    l.ItemConfigId == itemConfigId);
 
             if (ownBidExists)
                 throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You can`t create a lot for the item you are buying"));
@@ -112,8 +109,8 @@ public class OrderBookService(
             float usedWeightDiff = 0;
 
             // Can be applied by parts in cycle if numbers are too big.
-            if (itemConfig.Weight > 0)
-                usedWeightDiff = checked(-itemConfig.Weight * request.TotalQuantity);
+            if (itemWeight > 0)
+                usedWeightDiff = checked(-itemWeight * request.TotalQuantity);
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
 
@@ -153,12 +150,12 @@ public class OrderBookService(
         }
     }
 
-    public async UnaryResult<LotDto> SellUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb)
+    public async UnaryResult<LotDto> SellUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, float itemWeight)
     {
         if (request.TotalQuantity != 1)
             throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be 1 for unary item"));
 
-        var itemConfigId = request.ItemConfig.Id;
+        var itemConfigId = request.ItemConfigId;
 
         var hasItem = await aucyDb.ItemStacks.AnyAsync(x => x.ConfigId == itemConfigId && x.InventoryId == userId);
 
@@ -169,7 +166,7 @@ public class OrderBookService(
             ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Some of your operations with this item is already processing"));
 
         // throw because only one user can sell it`s Unary item
-        using var unaryLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryLock(request.ItemConfig.Id))
+        using var unaryLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryLock(itemConfigId))
             ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Failed to acquire user lock"));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync();
@@ -178,26 +175,26 @@ public class OrderBookService(
         {
             var ownBidExists = await aucyDb.Bids.AnyAsync(l =>
                 l.BidderUserId == userId &&
-                l.ItemConfigId == request.ItemConfig.Id);
+                l.ItemConfigId == itemConfigId);
 
             if (ownBidExists)
                 throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You can`t create a lot for the item you are buying"));
 
-            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(request.ItemConfig.Id, 1, userId);
+            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(itemConfigId, 1, userId);
 
             // Alter inventory UsedWeight
             float usedWeightDiff = 0;
 
             // Can be applied by parts in cycle if numbers are too large.
-            if (request.ItemConfig.Weight > 0)
-                usedWeightDiff = checked(-request.ItemConfig.Weight * request.TotalQuantity);
+            if (itemWeight > 0)
+                usedWeightDiff = checked(-itemWeight * request.TotalQuantity);
 
             await _inventoryProperties.ExecuteInventoryUpdate(userId, weightDiff: usedWeightDiff,
                 capacityDiff: usedCapacityDiff);
 
             // No mathing with bids for Unary items
             var lot = Lot.Create(ownerUserId: userId,
-                itemConfigId: request.ItemConfig.Id,
+                itemConfigId: itemConfigId,
                 unitPrice: request.UnitPrice,
                 totalQuantity: request.TotalQuantity);
 
