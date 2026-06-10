@@ -1,7 +1,6 @@
 ﻿using Aucy.Application.Helpers;
 using Aucy.Data;
 using Aucy.Domain.Entities;
-using AutoMapper;
 using Medallion.Threading;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
@@ -10,18 +9,11 @@ namespace Aucy.Application;
 
 public class OrderBookWorker(
     InventoryPropertiesService inventoryPropertiesService,
-    ItemsService itemsService,
     IDbContextFactory<AucyDbContext> aucyDbFactory,
-    IMapper mapper,
-    IDistributedReaderWriterLockProvider rwLockProvider,
-    IDistributedLockProvider lockProvider)
+    IDistributedReaderWriterLockProvider rwLockProvider)
 {
-
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
     private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
-    private readonly ItemsService _itemsService = itemsService;
-    private readonly IMapper _mapper = mapper;
-    private readonly IDistributedLockProvider _lockProvider = lockProvider;
     private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
 
     private const int INTERVAL_MS = 1000;
