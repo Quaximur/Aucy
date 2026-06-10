@@ -3,22 +3,25 @@ using Aucy.Data;
 using Aucy.Domain.Entities;
 using Medallion.Threading;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Data;
 
 namespace Aucy.Application;
 
-public class OrderBookWorker(
-    InventoryPropertiesService inventoryPropertiesService,
+public sealed partial class OrderBookWorker(
     IDbContextFactory<AucyDbContext> aucyDbFactory,
-    IDistributedReaderWriterLockProvider rwLockProvider)
+    IServiceScopeFactory scopeFactory,
+    IDistributedReaderWriterLockProvider rwLockProvider,
+    ILogger<OrderBookWorker> logger)
 {
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
-    private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
+    private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
     private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
-
+    private readonly ILogger<OrderBookWorker> _logger = logger;
     private const int INTERVAL_MS = 1000;
 
-    public async Task Run(Guid itemConfigId)
+    public async void RunAsync(Guid itemConfigId)
     {
         while (true)
         {
@@ -28,8 +31,12 @@ public class OrderBookWorker(
     }
 
     // TODO: use checked() for money
-    public async Task ProcessMatchingTickAsync(Guid itemConfigId)
+    private async Task ProcessMatchingTickAsync(Guid itemConfigId)
     {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+
+        var inventoryProperties = scope.ServiceProvider.GetRequiredService<InventoryPropertiesService>();
+
         // Orders deletion/creation lock
         // + await existing deletion/creation operations lock from user requests
         // bid/lot processed values collecting is unlocked
@@ -39,52 +46,63 @@ public class OrderBookWorker(
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync();
 
-        var minLotPrice = await aucyDb.Lots
-            .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0)
-            .MinAsync(l => l.UnitPrice);
-
-        var maxBidPrice = await aucyDb.Bids
-            .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0)
-            .MaxAsync(b => b.BidPrice);
-
-        // Mark all as matched before processing
-        await aucyDb.Lots
-            .Where(x => x.ItemConfigId == itemConfigId && !x.IsMatched)
-            .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsMatched, true));
-
-        await aucyDb.Bids
-            .Where(x => x.ItemConfigId == itemConfigId && !x.IsMatched)
-            .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsMatched, true));
-
-        if (minLotPrice > maxBidPrice)
+        try
         {
+            var minLotPrice = await aucyDb.Lots
+                        .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0)
+                        .MinAsync(l => (long?)l.UnitPrice) ?? long.MinValue;
+
+            var maxBidPrice = await aucyDb.Bids
+                .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0)
+                .MaxAsync(b => (long?)b.BidPrice) ?? long.MaxValue;
+
+            // Mark all as matched before processing
+            await aucyDb.Lots
+                .Where(x => x.ItemConfigId == itemConfigId && !x.IsMatched)
+                .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsMatched, true));
+
+            await aucyDb.Bids
+                .Where(x => x.ItemConfigId == itemConfigId && !x.IsMatched)
+                .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsMatched, true));
+
+            if (minLotPrice > maxBidPrice)
+            {
+                await transaction.CommitAsync();
+                return;
+            }
+
+            // Load all active lots and bids
+            var activeLots = await aucyDb.Lots
+                .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.UnitPrice <= maxBidPrice)
+                .OrderBy(l => l.UnitPrice)
+                .ThenBy(l => l.CreatedAt)
+                .ToListAsync();
+
+            var activeBids = await aucyDb.Bids
+                .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0 && b.BidPrice >= minLotPrice)
+                .OrderByDescending(b => b.BidPrice)
+                .ThenBy(b => b.CreatedAt)
+                .ToListAsync();
+
+            // Execute matching
+            // TODO: IN FUTURE: leave locked only (minLotPrice, maxBidPrice) orders. Unlock others
+            // if lot is created after bid with higher price in one tick, then add difference to Lot.ExtraSoldoutMoney of the seller
+            // if bid is created after lot with lower price in one tick, then add difference to Inventory.Money of the bidder 
+            await MatchOrdersAsync(aucyDb, inventoryProperties, activeLots, activeBids, itemConfigId);
+
             await transaction.CommitAsync();
-            return;
         }
-
-        // Load all active lots and bids
-        var activeLots = await aucyDb.Lots
-            .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.UnitPrice <= maxBidPrice)
-            .OrderBy(l => l.UnitPrice)
-            .ThenBy(l => l.CreatedAt)
-            .ToListAsync();
-
-        var activeBids = await aucyDb.Bids
-            .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0 && b.BidPrice >= minLotPrice)
-            .OrderByDescending(b => b.BidPrice)
-            .ThenBy(b => b.CreatedAt)
-            .ToListAsync();
-
-        // Execute matching
-        // TODO: IN FUTURE: leave locked only (minLotPrice, maxBidPrice) orders. Unlock others
-        // if lot is created after bid with higher price in one tick, then add difference to Lot.ExtraSoldoutMoney of the seller
-        // if bid is created after lot with lower price in one tick, then add difference to Inventory.Money of the bidder 
-        await MatchOrdersAsync(aucyDb, activeLots, activeBids, itemConfigId);
-
-        await transaction.CommitAsync();
+        catch
+        {
+            await transaction.RollbackAsync();
+        }
     }
 
-    private async Task MatchOrdersAsync(AucyDbContext aucyDb, List<Lot> lots, List<Bid> bids, Guid itemConfigId)
+    private async Task MatchOrdersAsync(AucyDbContext aucyDb,
+        InventoryPropertiesService inventoryProperties,
+        List<Lot> lots,
+        List<Bid> bids,
+        Guid itemConfigId)
     {
         int lotIndex = 0;
         int bidIndex = 0;
@@ -100,10 +118,11 @@ public class OrderBookWorker(
 
             int matchQuantity = Math.Min(currentLot.RemainingQuantity, currentBid.RemainingQuantity);
 
+            long clearingPrice;
             if (currentLot.UnitPrice != currentBid.BidPrice)
             {
                 // Determine clearing price based on who created their order first
-                long clearingPrice;
+
                 bool lotCreatedFirst = currentLot.CreatedAt <= currentBid.CreatedAt;
 
                 if (lotCreatedFirst)
@@ -119,7 +138,7 @@ public class OrderBookWorker(
                     // No ExtraSoldoutMoney for seller in this case
 
                     long extraProfit = (currentBid.BidPrice - clearingPrice) * matchQuantity;
-                    await _inventoryProperties.DepositMoney(currentBid.BidderUserId, extraProfit);
+                    await inventoryProperties.DepositMoney(currentBid.BidderUserId, extraProfit);
                 }
                 else
                 {
@@ -129,10 +148,21 @@ public class OrderBookWorker(
                     currentLot.ExtraSoldoutMoney += extraProfit;
                 }
             }
+            else
+            {
+                clearingPrice = currentLot.UnitPrice;
+            }
 
             // Update remaining quantities
             currentLot.RemainingQuantity -= matchQuantity;
             currentBid.RemainingQuantity -= matchQuantity;
+
+            LogSaleInformation(logger: _logger,
+                matchQuantity: matchQuantity,
+                itemConfigId: itemConfigId,
+                ownerUserId: currentLot.OwnerUserId,
+                bidderUserId: currentBid.BidderUserId,
+                clearingPrice: clearingPrice);
 
             // Move to next order if fully filled
             if (currentLot.RemainingQuantity == 0)
@@ -144,4 +174,17 @@ public class OrderBookWorker(
         // Save changes to matched orders
         await aucyDb.SaveChangesAsync();
     }
+
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Sold quantity '{MatchQuantity}' of ItemConfig '{ItemConfigId}' from Owner '{OwnerUserId}' to Bidder '{BidderUserId}' for price {ClearingPrice}"
+    )]
+    static partial void LogSaleInformation(
+        ILogger logger,
+        int matchQuantity,
+        Guid itemConfigId,
+        Guid ownerUserId,
+        Guid bidderUserId,
+        long clearingPrice
+    );
 }

@@ -23,7 +23,12 @@ builder.WebHost.ConfigureKestrel(options =>
 
 builder.AddDataServices();
 
+builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(LogLevel.Information);
+
 services.AddMagicOnion();
+
+services.AddTransient<OrderBookWorker>();
 
 services.AddScoped<InventoryPropertiesService>();
 services.AddScoped<ItemsService>();
@@ -69,5 +74,10 @@ app.UseAuthorization();
 app.MapMagicOnionService<OrderBookService>();
 app.MapMagicOnionService<InventoryService>();
 app.MapMagicOnionService<ItemSearchService>();
+
+// TEST Worker
+var orderBookWorker = app.Services.GetRequiredService<OrderBookWorker>();
+var breadId = new Guid(1, 0, 0, new byte[8]);
+orderBookWorker.RunAsync(breadId);
 
 app.Run();
