@@ -37,7 +37,7 @@ public class OrderBookWorker(
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        using var transaction = await aucyDb.Database.BeginTransactionAsync();
 
         var minLotPrice = await aucyDb.Lots
             .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0)
