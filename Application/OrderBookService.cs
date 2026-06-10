@@ -295,8 +295,6 @@ public class OrderBookService(
                         ItemConfigWeight = b.ItemConfig.Weight,
                         b.TotalQuantity,
                         b.RemainingQuantity,
-                        b.UnitPrice,
-                        b.ExtraSoldoutMoney
                     })
                     .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Lot doesn`t exist"));
 
@@ -895,98 +893,6 @@ public class OrderBookService(
                     $"An error occurred while collecting the bid: {ex.Message}"));
             }
         });
-    }
-
-    private async Task MatchLotWithBids(Lot lot, AucyDbContext aucyDb)
-    {
-        while (lot.RemainingQuantity > 0)
-        {
-            // TODO: repeat if any order was deleted
-            var bids = await aucyDb.Bids
-                .AsTracking()
-                .Where(x =>
-                    x.ItemConfigId == lot.ItemConfigId &&
-                    x.RemainingQuantity > 0 &&
-                    x.BidPrice >= lot.UnitPrice)
-                .OrderByDescending(x => x.BidPrice)
-                .ThenBy(x => x.CreatedAt)
-                //.ThenBy(x => x.Id)
-                .Take(MatchingBatchSize)
-                .ToListAsync();
-
-            if (bids.Count == 0)
-                return;
-
-            foreach (var bid in bids)
-            {
-                if (lot.RemainingQuantity == 0)
-                    break;
-
-                var tradeQuantity = Math.Min(lot.RemainingQuantity, bid.RemainingQuantity);
-
-                bid.RemainingQuantity -= tradeQuantity;
-                lot.RemainingQuantity -= tradeQuantity;
-
-                // Extra soldout money stores in lot.
-                // In case of changing commission user should deside when to take his money.
-                if (lot.UnitPrice < bid.BidPrice)
-                    lot.ExtraSoldoutMoney += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
-            }
-
-            await aucyDb.SaveChangesAsync();
-
-            if (bids.Count < MatchingBatchSize)
-                return;
-        }
-    }
-
-    private async Task MatchBidWithLots(Bid bid, AucyDbContext aucyDb)
-    {
-        /// Item can be bought with lower price than specified in <see cref="Bid.BidPrice"/> at the moment of bid creation. 
-        /// In this case, user will pay less money for the item. That difference will be stored here.
-        long refund = 0;
-
-        while (bid.RemainingQuantity > 0)
-        {
-            // TODO: repeat if any order was deleted
-            var lots = await aucyDb.Lots
-                .AsTracking()
-                .Where(x =>
-                    x.ItemConfigId == bid.ItemConfigId &&
-                    x.RemainingQuantity > 0 &&
-                    x.UnitPrice <= bid.BidPrice)
-                .OrderBy(x => x.UnitPrice)
-                .ThenBy(x => x.CreatedAt)
-                //.ThenBy(x => x.Id)
-                .Take(MatchingBatchSize)
-                .ToListAsync();
-
-            if (lots.Count == 0)
-                break;
-
-            foreach (var lot in lots)
-            {
-                if (bid.RemainingQuantity == 0)
-                    break;
-
-                var tradeQuantity = Math.Min(bid.RemainingQuantity, lot.RemainingQuantity);
-
-                lot.RemainingQuantity -= tradeQuantity;
-                bid.RemainingQuantity -= tradeQuantity;
-
-                if (bid.BidPrice > lot.UnitPrice)
-                    refund += checked((bid.BidPrice - lot.UnitPrice) * tradeQuantity);
-            }
-
-            await aucyDb.SaveChangesAsync();
-
-            if (lots.Count < MatchingBatchSize)
-                break;
-        }
-
-        // No commission => instant money recovery
-        if (refund > 0)
-            await _inventoryProperties.DepositMoney(bid.BidderUserId, refund);
     }
 
     private AsyncRetryPolicy GetRetryPolicy()
