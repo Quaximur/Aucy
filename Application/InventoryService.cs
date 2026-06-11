@@ -101,17 +101,35 @@ public class InventoryService(AucyDbContext aucyDbContext,
         catch (Exception ex)
         {
             await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal,
-                $"Failed to add item stack: {ex.Message}"));
+            throw new RpcException(new Status(StatusCode.Internal, $"Failed to add item stack: {ex.Message}"));
         }
     }
 
-    public UnaryResult<long> AddMoney(long moneyToAdd)
+    public async UnaryResult<long> AddMoney(long moneyToAdd)
     {
-        throw new NotImplementedException();
+        using var transaction = await _aucyDb.Database.BeginTransactionAsync();
+
+        try
+        {
+            // TODO: logic
+
+            await transaction.CommitAsync();
+
+            return 0; // TODO: result
+        }
+        catch (RpcException)
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            throw new RpcException(new Status(StatusCode.Internal, $"Failed to add money: {ex.Message}"));
+        }
     }
 
-    public UnaryResult<long> RemoveMoney(long moneyToTake)
+    public async UnaryResult<long> RemoveMoney(long moneyToTake)
     {
         throw new NotImplementedException();
     }
