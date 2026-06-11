@@ -49,7 +49,7 @@ public class InventoryPropertiesService(AucyDbContext aucyDbContext)
             .ExecuteUpdateAsync(x => x.SetProperty(i => i.Money, i => i.Money - amount));
 
         if (updatedRows != 1)
-            throw new RpcException(new Status(StatusCode.ResourceExhausted, "Not enough money"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Not enough money"));
     }
 
     public async Task DepositMoney(Guid userId, long amount)
@@ -59,6 +59,6 @@ public class InventoryPropertiesService(AucyDbContext aucyDbContext)
             .ExecuteUpdateAsync(x => x.SetProperty(i => i.Money, i => i.Money + amount));
 
         if (updatedRows != 1)
-            throw new RpcException(new Status(StatusCode.NotFound, "Inventory not found. Can`t add money"));
+            throw new RpcException(new Status(StatusCode.NotFound, "Inventory is not determined. Can`t add money"));
     }
 }

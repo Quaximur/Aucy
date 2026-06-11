@@ -8,7 +8,7 @@ namespace Aucy.Contracts.OnionServer
         public UnaryResult<InventoryDto> CreateInventory(CreateInventoryDto request);
         public UnaryResult<Nil> AddItemStack(AddItemStackDto request);
         public UnaryResult<Nil> RemoveItemStack(RemoveItemStackDto request);
-        public UnaryResult<long> AddMoney(long moneyToAdd);
-        public UnaryResult<long> RemoveMoney(long moneyToTake);
+        public UnaryResult<Nil> AddMoney(long moneyToAdd);
+        public UnaryResult<Nil> RemoveMoney(long moneyToTake);
     }
 }

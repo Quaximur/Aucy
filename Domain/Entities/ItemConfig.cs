@@ -52,7 +52,7 @@ public class ItemConfig
         int? rarity,
         float weight,
         string baseType, 
-        List<string> extra, 
+        List<string>? extra, 
         string categoryPath)
     {
         return new ItemConfig
