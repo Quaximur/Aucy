@@ -73,12 +73,14 @@ public sealed partial class OrderBookWorker(
 
             // Load all active lots and bids
             var activeLots = await aucyDb.Lots
+                .AsTracking()
                 .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.UnitPrice <= maxBidPrice)
                 .OrderBy(l => l.UnitPrice)
                 .ThenBy(l => l.CreatedAt)
                 .ToListAsync();
 
             var activeBids = await aucyDb.Bids
+                .AsTracking()
                 .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0 && b.BidPrice >= minLotPrice)
                 .OrderByDescending(b => b.BidPrice)
                 .ThenBy(b => b.CreatedAt)
@@ -175,10 +177,8 @@ public sealed partial class OrderBookWorker(
         await aucyDb.SaveChangesAsync();
     }
 
-    [LoggerMessage(
-        Level = LogLevel.Information,
-        Message = "Sold quantity '{MatchQuantity}' of ItemConfig '{ItemConfigId}' from Owner '{OwnerUserId}' to Bidder '{BidderUserId}' for price {ClearingPrice}"
-    )]
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Sold quantity '{MatchQuantity}' of ItemConfig '{ItemConfigId}' from Owner '{OwnerUserId}' to Bidder '{BidderUserId}' for price {ClearingPrice}")]
     static partial void LogSaleInformation(
         ILogger logger,
         int matchQuantity,
