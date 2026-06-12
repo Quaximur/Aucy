@@ -1,6 +1,5 @@
 ﻿using Aucy.Contracts.OnionClient;
 using Aucy.Data;
-using AutoMapper;
 using Grpc.Core;
 using MagicOnion;
 using MagicOnion.Server;
