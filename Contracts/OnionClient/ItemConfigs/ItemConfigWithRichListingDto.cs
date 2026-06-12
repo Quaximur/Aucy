@@ -5,12 +5,12 @@ using System;
 namespace Aucy.Contracts.OnionClient
 {
     [MessagePackObject]
-    public class ItemConfigWithRawListing : ItemConfigDto
+    public class ItemConfigWithRichListingDto : ItemConfigDto
     {
-        [Key(10)] public RawLotTuple[] RawLots { get; set; }
-        [Key(11)] public RawBidTuple[] RawBids { get; set; }
+        [Key(10)] public LotDto[] Lots { get; set; }
+        [Key(11)] public BidDto[] Bids { get; set; }
 
-        public ItemConfigWithRawListing(Guid id,
+        public ItemConfigWithRichListingDto(Guid id,
             string name,
             bool isUnary,
             string icon,
@@ -20,8 +20,8 @@ namespace Aucy.Contracts.OnionClient
             string baseType,
             List<string> extra,
             string categoryPath,
-            RawLotTuple[] rawLots,
-            RawBidTuple[] rawBids)
+            LotDto[] lots,
+            BidDto[] bids)
 
             : base(id: id,
                   name: name,
@@ -34,8 +34,8 @@ namespace Aucy.Contracts.OnionClient
                   extra: extra,
                   categoryPath: categoryPath)
         {
-            RawLots = rawLots;
-            RawBids = rawBids;
+            Lots = lots;
+            Bids = bids;
         }
     }
 }

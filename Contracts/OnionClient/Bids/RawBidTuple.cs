@@ -10,5 +10,11 @@ namespace Aucy.Contracts.OnionClient
     {
         [Key(0)] public long BidPrice { get; }
         [Key(1)] public long RemainingQuantity { get; }
+
+        public RawBidTuple(long bidPrice, long remainingQuantity)
+        {
+            BidPrice = bidPrice;
+            RemainingQuantity = remainingQuantity;
+        }
     }
 }

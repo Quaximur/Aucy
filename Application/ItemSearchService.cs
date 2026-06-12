@@ -18,16 +18,6 @@ public class ItemSearchService(AucyDbContext aucyDbContext, IMapper mapper) : Se
     private readonly AucyDbContext _aucyDb = aucyDbContext;
     private readonly IMapper _mapper = mapper;
 
-    public UnaryResult<ItemConfigWithRawListing> GetItemConfig(GetItemConfigDto request)
-    {
-        throw new NotImplementedException();
-    }
-
-    public UnaryResult<ItemConfigWithRichListing> GetRichItemConfig(GetItemConfigDto request)
-    {
-        throw new NotImplementedException();
-    }
-
     public async UnaryResult<ItemConfigsDto> GetItemConfigs(GetItemConfigsDto request)
     {
         Console.WriteLine($"{nameof(GetItemConfigs)} request");
