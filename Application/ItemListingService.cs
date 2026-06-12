@@ -33,6 +33,7 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
 
         try
         {
+            // TODO: raw SQL or Redis with pre-calc in BackgroundWorker
             var lotsQuery = _aucyDb.Lots
                 .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.IsMatched)
                 .Select(l => new { l.UnitPrice, l.RemainingQuantity });
