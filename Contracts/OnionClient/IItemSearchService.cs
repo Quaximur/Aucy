@@ -1,5 +1,4 @@
-﻿using Aucy.Contracts.OnionServer;
-using MagicOnion;
+﻿using MagicOnion;
 
 namespace Aucy.Contracts.OnionClient
 {
@@ -13,6 +12,5 @@ namespace Aucy.Contracts.OnionClient
         /// </summary>
         public UnaryResult<ItemConfigWithRichListing> GetRichItemConfig(GetItemConfigDto request);
         public UnaryResult<ItemConfigsDto> GetItemConfigs(GetItemConfigsDto request);
-        public UnaryResult<InventoryDto> GetOwnInventory(GetInventoryDto request);
     }
 }

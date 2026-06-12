@@ -1,5 +1,6 @@
 ﻿using Aucy.Application.Exceptions;
 using Aucy.Application.Helpers;
+using Aucy.Contracts.OnionClient;
 using Aucy.Contracts.OnionServer;
 using Aucy.Data;
 using Aucy.Domain.Entities;

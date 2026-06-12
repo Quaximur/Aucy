@@ -1,6 +1,7 @@
-﻿using MessagePack;
+﻿using Aucy.Contracts.OnionClient;
+using MessagePack;
 
-namespace Aucy.Contracts.OnionServer
+namespace Aucy.Contracts.OnionClient
 {
     [MessagePackObject]
     public class InventoryDto

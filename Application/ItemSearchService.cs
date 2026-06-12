@@ -1,6 +1,4 @@
-﻿using Aucy.Application.Helpers;
-using Aucy.Contracts.OnionClient;
-using Aucy.Contracts.OnionServer;
+﻿using Aucy.Contracts.OnionClient;
 using Aucy.Data;
 using AutoMapper;
 using Grpc.Core;
@@ -12,11 +10,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Aucy.Application;
 
 [Authorize]
-public class ItemSearchService(AucyDbContext aucyDbContext,
-    IMapper mapper) : ServiceBase<IItemSearchService>,
-#pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
+public class ItemSearchService(AucyDbContext aucyDbContext, IMapper mapper) : ServiceBase<IItemSearchService>,
+#pragma warning disable CS8644 
     IItemSearchService
-#pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
+#pragma warning restore CS8644
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
     private readonly IMapper _mapper = mapper;
@@ -59,45 +56,5 @@ public class ItemSearchService(AucyDbContext aucyDbContext,
             .ToListAsync();
 
         return new ItemConfigsDto(itemConfigsList);
-    }
-
-    public async UnaryResult<InventoryDto> GetOwnInventory(GetInventoryDto request)
-    {
-        var userId = Context.GetUserId();
-
-        try
-        {
-            var inventory = await _aucyDb.Inventories
-                .Where(x => x.Id == userId)
-                .Select(x => new InventoryDto
-                {
-                    Capacity = x.Capacity,
-                    UsedCapacity = x.UsedCapacity,
-                    WeightLimit = x.WeightLimit,
-                    UsedWeight = x.UsedWeight,
-                    ItemStacks = x.ItemStacks
-                        .Skip((request.Page - 1) * request.PageSize)
-                        .Take(request.PageSize)
-                        .Select(i => new ItemStackDto
-                        {
-                            ItemConfig = _mapper.Map<ItemConfigDto>(i.Config),
-                            Quantity = i.Quantity,
-                        })
-                        .ToArray()
-                })
-                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
-                    "Inventory doesn't exist"));
-
-            return inventory;
-        }
-        catch (RpcException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new RpcException(new Status(StatusCode.Internal,
-                $"Failed to get inventory: {ex.Message}"));
-        }
     }
 }

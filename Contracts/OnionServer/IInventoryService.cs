@@ -1,4 +1,5 @@
-﻿using MagicOnion;
+﻿using Aucy.Contracts.OnionClient;
+using MagicOnion;
 using MessagePack;
 
 namespace Aucy.Contracts.OnionServer
