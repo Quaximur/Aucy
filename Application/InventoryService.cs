@@ -21,6 +21,7 @@ namespace Aucy.Application;
 public class InventoryService(AucyDbContext aucyDbContext,
     InventoryPropertiesService inventoryPropertiesService,
     ItemsService itemsService,
+    IDbContextFactory<AucyDbContext> aucyDbFactory,
     IMapper mapper) : ServiceBase<IInventoryService>,
 #pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
     IInventoryService
@@ -28,6 +29,7 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
+    private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
     private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
     private readonly ItemsService _itemsService = itemsService;
     private readonly IMapper _mapper = mapper;
@@ -35,7 +37,6 @@ public class InventoryService(AucyDbContext aucyDbContext,
     public async UnaryResult<Nil> AddItemStack(AddItemStackDto request)
     {
         var userId = Context.GetUserId();
-        var itemConfigId = request.ItemConfig.Id;
 
         if (request.Quantity <= 0)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Quantity must be greater than zero"));
@@ -45,14 +46,18 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
         if (request.ItemConfig.IsUnary && request.Quantity != 1)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Quantity must be 1 for unary items"));
-       
+
+        var itemConfigId = request.ItemConfig.Id;
+
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
+
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
             try
             {
-                var inventoryFields = await _aucyDb.Inventories
+                var inventoryFields = await aucyDb.Inventories
                     .Where(x => x.Id == userId)
                     .Select(x => new { x.Id, x.Capacity, x.UsedCapacity, x.WeightLimit, x.UsedWeight })
                     .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
@@ -60,14 +65,14 @@ public class InventoryService(AucyDbContext aucyDbContext,
 
                 // Find or create the ItemConfig
                 // Mostly used for Unary items
-                var itemConfig = await _aucyDb.ItemConfigs.FirstOrDefaultAsync(x => x.Id == itemConfigId);
+                var itemConfig = await aucyDb.ItemConfigs.FirstOrDefaultAsync(x => x.Id == itemConfigId);
 
                 if (itemConfig == null)
                 {
                     itemConfig = _mapper.Map<ItemConfig>(request.ItemConfig);
 
-                    _aucyDb.ItemConfigs.Add(itemConfig);
-                    await _aucyDb.SaveChangesAsync(); // save instantly to use for ItemStack update
+                    aucyDb.ItemConfigs.Add(itemConfig);
+                    await aucyDb.SaveChangesAsync(); // save instantly to use for ItemStack update
 
                     Console.WriteLine($"ItemConfig not found, created new one: {itemConfig.Id}, {itemConfig.Name}");
                 }
@@ -76,16 +81,18 @@ public class InventoryService(AucyDbContext aucyDbContext,
                     Console.WriteLine($"ItemConfig found: {itemConfig.Id}, {itemConfig.Name}");
                 }
 
-                if (inventoryFields.UsedCapacity + request.Quantity > inventoryFields.Capacity)
-                    throw new RpcException(new Status(StatusCode.ResourceExhausted, "Inventory capacity limit exceeded"));
+                // x > z - y <=> x + y > z (no overflow)
+                if (inventoryFields.UsedCapacity > inventoryFields.Capacity - 1)
+                    throw new NoRetryRpcException(new Status(StatusCode.ResourceExhausted, "Inventory capacity limit exceeded"));
 
                 float usedWeightDiff = 0;
 
                 if (itemConfig.Weight > 0)
                 {
-                    usedWeightDiff = itemConfig.Weight * request.Quantity;
+                    usedWeightDiff = checked(itemConfig.Weight * request.Quantity);
 
-                    if (inventoryFields.UsedWeight + usedWeightDiff > inventoryFields.WeightLimit)
+                    // x > z - y <=> x + y > z (no overflow)
+                    if (inventoryFields.UsedWeight > inventoryFields.WeightLimit - usedWeightDiff)
                         throw new NoRetryRpcException(new Status(StatusCode.ResourceExhausted, "Inventory weight limit exceeded"));
                 }
 
@@ -103,6 +110,11 @@ public class InventoryService(AucyDbContext aucyDbContext,
             {
                 await transaction.RollbackAsync();
                 throw;
+            }
+            catch (OverflowException)
+            {
+                await transaction.RollbackAsync();
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Amount is too large"));
             }
             catch (Exception ex)
             {
