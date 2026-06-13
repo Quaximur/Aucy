@@ -7,11 +7,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Grpc.AspNetCore" Version="2.80.0" />
+    <PackageReference Include="AutoMapper" Version="16.1.1" />
+    <PackageReference Include="DistributedLock.Redis" Version="1.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
+    <PackageReference Include="Polly" Version="8.6.6" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Contracts\Aucy.Contracts.csproj" />
+    <ProjectReference Include="..\Data\Aucy.Data.csproj" />
   </ItemGroup>
 
 </Project>

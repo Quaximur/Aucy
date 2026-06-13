@@ -1,0 +1,15 @@
+﻿using Aucy.Contracts.OnionClient;
+using MessagePack;
+
+namespace Aucy.Contracts.OnionClient
+{
+    [MessagePackObject]
+    public class InventoryDto
+    {
+        [Key(0)] public ItemStackDto[] ItemStacks { get; set; }
+        [Key(1)] public int Capacity { get; set; }
+        [Key(2)] public int UsedCapacity { get; set; }
+        [Key(3)] public float WeightLimit { get; set; }
+        [Key(4)] public float UsedWeight { get; set; }
+    }
+}
