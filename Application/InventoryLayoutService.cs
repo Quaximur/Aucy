@@ -34,6 +34,7 @@ public class InventoryLayoutService(AucyDbContext aucyDbContext, IMapper mapper)
                     WeightLimit = x.WeightLimit,
                     UsedWeight = x.UsedWeight,
                     ItemStacks = x.ItemStacks
+                        .OrderBy(x => x.CreatedAt)
                         .Skip((request.Page - 1) * request.PageSize)
                         .Take(request.PageSize)
                         .Select(i => new ItemStackDto

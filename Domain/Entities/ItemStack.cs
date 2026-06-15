@@ -15,6 +15,7 @@ public class ItemStack
 
     [Range(1, int.MaxValue)]
     public int Quantity { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public Guid InventoryId { get; set; } // TODO: UNIQUE (ConfigId, InventoryId) for grouping
 
     /// <summary>

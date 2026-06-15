@@ -40,6 +40,7 @@ public class ItemSearchService(AucyDbContext aucyDbContext, IMapper mapper) : Se
 
         var itemConfigsList = await query
             .Where(x => !x.IsUnary || x.Lots.Any()) // No zombie configs
+            .OrderBy(x => x.Id)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .Select(x => _mapper.Map<ItemConfigDto>(x))
