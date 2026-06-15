@@ -10,6 +10,7 @@ using MagicOnion;
 using MagicOnion.Server;
 using MessagePack;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Polly;
 using Polly.Retry;
@@ -18,7 +19,7 @@ using System.Data;
 namespace Aucy.Application;
 
 [Authorize]
-public class InventoryService(AucyDbContext aucyDbContext,
+public class InventoryService(
     InventoryPropertiesService inventoryPropertiesService,
     ItemsService itemsService,
     IDbContextFactory<AucyDbContext> aucyDbFactory,
@@ -28,7 +29,6 @@ public class InventoryService(AucyDbContext aucyDbContext,
 #pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
 
 {
-    private readonly AucyDbContext _aucyDb = aucyDbContext;
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
     private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
     private readonly ItemsService _itemsService = itemsService;
@@ -176,80 +176,97 @@ public class InventoryService(AucyDbContext aucyDbContext,
             UsedWeight = 0
         };
 
-        _aucyDb.Inventories.Add(newInventory); // catch already existing inventory exception
-        await _aucyDb.SaveChangesAsync();
-
-        return new InventoryDto()
+        return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            Capacity = newInventory.Capacity,
-            UsedCapacity = newInventory.UsedCapacity,
-            WeightLimit = newInventory.WeightLimit,
-            UsedWeight = newInventory.UsedWeight,
-            ItemStacks = []
-        };
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
+
+            try
+            {
+                aucyDb.Inventories.Add(newInventory); // catch already existing inventory exception
+                await aucyDb.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx && (sqlEx.Number == 2627 || sqlEx.Number == 2601))
+            {
+                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Inventory already exists"));
+            }
+
+            return new InventoryDto()
+            {
+                Capacity = newInventory.Capacity,
+                UsedCapacity = newInventory.UsedCapacity,
+                WeightLimit = newInventory.WeightLimit,
+                UsedWeight = newInventory.UsedWeight,
+                ItemStacks = []
+            };
+        });
     }
 
     public async UnaryResult<Nil> RemoveItemStack(RemoveItemStackDto request)
     {
         var userId = Context.GetUserId();
 
-        // Block specified Inventory and ItemStack of a SINGLE User (it`s ok because other users don`t even use it)
-        using var transaction = await _aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
-
-        try
+        return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            var itemStackFields = await _aucyDb.ItemStacks
-                .Where(i => i.Id == request.ItemStackId && i.InventoryId == userId)
-                .Select(x => new { x.Id, x.Quantity, ConfigWeight = x.Config.Weight })
-                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
-                    "ItemStack not found in inventory"));
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-            if (itemStackFields.Quantity < request.Quantity)
-                throw new RpcException(new Status(StatusCode.InvalidArgument,
-                    $"Cannot remove {request.Quantity} items, only {itemStackFields.Quantity} available"));
+            // Block specified Inventory and ItemStack of a SINGLE User (it`s ok because other users don`t even use it)
+            using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
-            var itemStackId = itemStackFields.Id;
-            int usedCapacityDiff = 0;
-            var updatedItemStacks = 0;
-
-            if (itemStackFields.Quantity == request.Quantity)
+            try
             {
-                updatedItemStacks = await _aucyDb.ItemStacks.Where(x => x.Id == itemStackFields.Id)
-                    .ExecuteDeleteAsync();
+                var itemStackFields = await aucyDb.ItemStacks
+                    .Where(i => i.Id == request.ItemStackId && i.InventoryId == userId)
+                    .Select(x => new { x.Id, x.Quantity, ConfigWeight = x.Config.Weight })
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
+                        "ItemStack not found in inventory"));
 
-                usedCapacityDiff = -1;
+                if (itemStackFields.Quantity < request.Quantity)
+                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument,
+                        $"Cannot remove {request.Quantity} items, only {itemStackFields.Quantity} available"));
+
+                var itemStackId = itemStackFields.Id;
+                int usedCapacityDiff = 0;
+                var updatedItemStacks = 0;
+
+                if (itemStackFields.Quantity == request.Quantity)
+                {
+                    updatedItemStacks = await aucyDb.ItemStacks.Where(x => x.Id == itemStackFields.Id)
+                        .ExecuteDeleteAsync();
+
+                    usedCapacityDiff = -1;
+                }
+                else
+                {
+                    updatedItemStacks = await aucyDb.ItemStacks
+                        .Where(x => x.Id == itemStackId)
+                        .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity - request.Quantity));
+                }
+
+                if (updatedItemStacks != 1)
+                    throw new NoRetryRpcException(new Status(StatusCode.NotFound, $"ItemStack is not determined. Entries found: {updatedItemStacks}"));
+
+                float usedWeightDiff = 0;
+                if (itemStackFields.ConfigWeight > 0)
+                    usedWeightDiff = -itemStackFields.ConfigWeight * request.Quantity;
+
+                await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+
+                await transaction.CommitAsync();
+
+                return Nil.Default;
             }
-            else
+            catch (RpcException)
             {
-                updatedItemStacks = await _aucyDb.ItemStacks
-                    .Where(x => x.Id == itemStackId)
-                    .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity - request.Quantity));
+                await transaction.RollbackAsync();
+                throw;
             }
-
-            if (updatedItemStacks != 1)
-                throw new RpcException(new Status(StatusCode.NotFound, $"ItemStack is not determined. Entries found: {updatedItemStacks}"));
-
-            float usedWeightDiff = 0;
-            if (itemStackFields.ConfigWeight > 0)
-                usedWeightDiff = -itemStackFields.ConfigWeight * request.Quantity;
-
-            await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
-
-            await transaction.CommitAsync();
-
-            return Nil.Default;
-        }
-        catch (RpcException)
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal,
-                $"Failed to remove item stack: {ex.Message}"));
-        }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"Failed to remove item stack: {ex.Message}"));
+            }
+        });
     }
 
     private AsyncRetryPolicy GetRetryPolicy()
