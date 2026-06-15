@@ -3,6 +3,7 @@ using Aucy.Application;
 using Aucy.Application.Auth;
 using Aucy.Application.Helpers;
 using Aucy.Application.Mappings;
+using Aucy.Contracts.OnionClient;
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -33,6 +34,7 @@ services.AddTransient<OrderBookWorker>();
 
 services.AddScoped<InventoryPropertiesService>();
 services.AddScoped<ItemsService>();
+services.AddSingleton<WorkerGroupService>();
 
 services.AddApiAuth();
 

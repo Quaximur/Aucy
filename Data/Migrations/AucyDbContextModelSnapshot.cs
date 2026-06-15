@@ -153,6 +153,9 @@ namespace Aucy.Data.Migrations
                     b.Property<Guid>("ConfigId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid>("InventoryId")
                         .HasColumnType("uniqueidentifier");
 

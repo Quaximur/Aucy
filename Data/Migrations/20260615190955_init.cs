@@ -86,6 +86,7 @@ namespace Aucy.Data.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     ConfigId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Quantity = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     InventoryId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     ItemConfigId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
                 },

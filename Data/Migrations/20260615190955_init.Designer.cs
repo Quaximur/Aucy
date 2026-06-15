@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Aucy.Data.Migrations
 {
     [DbContext(typeof(AucyDbContext))]
-    [Migration("20260604155924_init")]
+    [Migration("20260615190955_init")]
     partial class init
     {
         /// <inheritdoc />
@@ -155,6 +155,9 @@ namespace Aucy.Data.Migrations
 
                     b.Property<Guid>("ConfigId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<Guid>("InventoryId")
                         .HasColumnType("uniqueidentifier");
