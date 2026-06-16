@@ -150,7 +150,7 @@ public class OrderHub(WorkerGroupService workerGroupService,
     }
 
     [Ignore]
-    private async UnaryResult<LotCreatedDto> SellNonUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, 
+    private async UnaryResult<LotCreatedDto> SellNonUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb,
         ItemConfigDto itemConfigDto)
     {
         var itemConfigId = request.ItemConfigId;
@@ -215,10 +215,10 @@ public class OrderHub(WorkerGroupService workerGroupService,
 
             Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
 
-            return new LotCreatedDto(lotId: lot.Id, 
-                itemConfig: itemConfigDto, 
-                unitPrice: lot.UnitPrice, 
-                totalQuantity: 
+            return new LotCreatedDto(lotId: lot.Id,
+                itemConfig: itemConfigDto,
+                unitPrice: lot.UnitPrice,
+                totalQuantity:
                 lot.TotalQuantity);
         }
         catch (OverflowException)
@@ -296,8 +296,7 @@ public class OrderHub(WorkerGroupService workerGroupService,
             return new LotCreatedDto(lotId: lot.Id,
                 itemConfig: itemConfigDto,
                 unitPrice: lot.UnitPrice,
-                totalQuantity:
-                lot.TotalQuantity);
+                totalQuantity: lot.TotalQuantity);
         }
         catch (OverflowException)
         {

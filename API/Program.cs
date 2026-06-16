@@ -83,6 +83,7 @@ app.MapMagicOnionService<InventoryService>();
 app.MapMagicOnionService<InventoryLayoutService>();
 app.MapMagicOnionService<ItemSearchService>();
 app.MapMagicOnionService<ItemListingService>();
+app.MapMagicOnionService<OrderHub>();
 
 app.Run();
 

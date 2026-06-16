@@ -200,7 +200,7 @@ public sealed partial class OrderBookWorker(
                     // No ExtraSoldoutMoney for seller in this case
 
                     long extraProfit = (currentBid.BidPrice - clearingPrice) * matchQuantity;
-                    await inventoryProperties.DepositMoney(currentBid.BidderUserId, extraProfit); // TODO: gather extraMoney for sequence (no multiple deposits)
+                    await inventoryProperties.DepositMoney(aucyDb, currentBid.BidderUserId, extraProfit); // TODO: gather extraMoney for sequence (no multiple deposits)
                     bidEvent.ExtraMoney += extraProfit;
                 }
                 else
