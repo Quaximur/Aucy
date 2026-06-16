@@ -5,16 +5,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Aucy.Application.Helpers;
 
-public class ItemsService(AucyDbContext aucyDbContext)
+public class ItemsHelper()
 {
-    private readonly AucyDbContext _aucyDb = aucyDbContext;
-
-    public async Task<int> UpdateOrInsertItemStack(Guid itemConfigId, int quantity, Guid inventoryId)
+    public async Task<int> UpdateOrInsertItemStack(AucyDbContext aucyDb, Guid itemConfigId, int quantity, Guid inventoryId)
     {
         // Try to update an existing ItemStack with the same ConfigId or create new one if not found
         var usedCapacityDiff = 0;
 
-        var updatedItemStacks = await _aucyDb.ItemStacks
+        var updatedItemStacks = await aucyDb.ItemStacks
                 .Where(i => i.InventoryId == inventoryId && i.ConfigId == itemConfigId)
                 .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity + quantity));
 
@@ -22,8 +20,8 @@ public class ItemsService(AucyDbContext aucyDbContext)
         {
             var itemStack = ItemStack.Create(itemConfigId, quantity, inventoryId);
 
-            _aucyDb.ItemStacks.Add(itemStack);
-            await _aucyDb.SaveChangesAsync();
+            aucyDb.ItemStacks.Add(itemStack);
+            await aucyDb.SaveChangesAsync();
 
             usedCapacityDiff = 1;
         }
@@ -36,18 +34,18 @@ public class ItemsService(AucyDbContext aucyDbContext)
         return usedCapacityDiff;
     }
 
-    public async Task<int> UpdateOrDeleteItemStack(Guid itemConfigId, int quantity, Guid inventoryId)
+    public async Task<int> UpdateOrDeleteItemStack(AucyDbContext aucyDb, Guid itemConfigId, int quantity, Guid inventoryId)
     {
         // Reduce the quantity or remove the ItemStack
         var usedCapacityDiff = 0;
 
-        var updatedItemStacks = await _aucyDb.ItemStacks
+        var updatedItemStacks = await aucyDb.ItemStacks
                 .Where(x => x.ConfigId == itemConfigId && x.InventoryId == inventoryId && x.Quantity > quantity)
                 .ExecuteUpdateAsync(x => x.SetProperty(i => i.Quantity, i => i.Quantity - quantity));
 
         if (updatedItemStacks == 0)
         {
-            updatedItemStacks = await _aucyDb.ItemStacks
+            updatedItemStacks = await aucyDb.ItemStacks
                  .Where(x => x.ConfigId == itemConfigId && x.InventoryId == inventoryId && x.Quantity == quantity)
                  .ExecuteDeleteAsync();
 

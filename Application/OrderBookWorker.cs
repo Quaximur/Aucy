@@ -50,7 +50,7 @@ public sealed partial class OrderBookWorker(
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
 
-        var inventoryProperties = scope.ServiceProvider.GetRequiredService<InventoryPropertiesService>();
+        var inventoryProperties = scope.ServiceProvider.GetRequiredService<InventoryPropertiesHelper>();
 
         // Orders deletion/creation lock
         // + await existing deletion/creation operations lock from user requests
@@ -143,7 +143,7 @@ public sealed partial class OrderBookWorker(
     }
 
     private async Task MatchOrdersAsync(AucyDbContext aucyDb,
-        InventoryPropertiesService inventoryProperties,
+        InventoryPropertiesHelper inventoryProperties,
         List<Lot> lots,
         List<Bid> bids,
         Guid itemConfigId,

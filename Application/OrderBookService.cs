@@ -18,8 +18,8 @@ namespace Aucy.Application;
 
 [Authorize]
 public class OrderBookService(
-    InventoryPropertiesService inventoryPropertiesService,
-    ItemsService itemsService,
+    InventoryPropertiesHelper inventoryPropertiesService,
+    ItemsHelper itemsService,
     IDbContextFactory<AucyDbContext> aucyDbFactory,
     IMapper mapper,
     IDistributedReaderWriterLockProvider rwLockProvider,
@@ -28,11 +28,9 @@ public class OrderBookService(
     IOrderBookService
 #pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
 {
-    private const int MatchingBatchSize = 256;
-
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
-    private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
-    private readonly ItemsService _itemsService = itemsService;
+    private readonly InventoryPropertiesHelper _inventoryProperties = inventoryPropertiesService;
+    private readonly ItemsHelper _itemsService = itemsService;
     private readonly IMapper _mapper = mapper;
     private readonly IDistributedLockProvider _lockProvider = lockProvider;
     private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
@@ -66,7 +64,7 @@ public class OrderBookService(
         });
     }
 
-    public async UnaryResult<LotDto> SellNonUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, float itemWeight)
+    private async UnaryResult<LotDto> SellNonUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, float itemWeight)
     {
         var itemConfigId = request.ItemConfigId;
 
@@ -103,7 +101,7 @@ public class OrderBookService(
                     "There are not enough items in your inventory"));
 
             // Reduce the quantity or remove the ItemStack
-            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(itemConfigId, request.TotalQuantity, userId);
+            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(aucyDb, itemConfigId, request.TotalQuantity, userId);
 
             // Alter inventory UsedWeight
             float usedWeightDiff = 0;
@@ -112,7 +110,7 @@ public class OrderBookService(
             if (itemWeight > 0)
                 usedWeightDiff = checked(-itemWeight * request.TotalQuantity);
 
-            await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+            await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
 
             // TIP: If you don`t want to create lot after instant soldout,
             // then you have to validate inventory properties
@@ -150,7 +148,7 @@ public class OrderBookService(
         }
     }
 
-    public async UnaryResult<LotDto> SellUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, float itemWeight)
+    private async UnaryResult<LotDto> SellUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, float itemWeight)
     {
         if (request.TotalQuantity != 1)
             throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be 1 for unary item"));
@@ -180,7 +178,7 @@ public class OrderBookService(
             if (ownBidExists)
                 throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You can`t create a lot for the item you are buying"));
 
-            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(itemConfigId, 1, userId);
+            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(aucyDb, itemConfigId, 1, userId);
 
             // Alter inventory UsedWeight
             float usedWeightDiff = 0;
@@ -189,7 +187,7 @@ public class OrderBookService(
             if (itemWeight > 0)
                 usedWeightDiff = checked(-itemWeight * request.TotalQuantity);
 
-            await _inventoryProperties.ExecuteInventoryUpdate(userId, weightDiff: usedWeightDiff,
+            await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, weightDiff: usedWeightDiff,
                 capacityDiff: usedCapacityDiff);
 
             // No mathing with bids for Unary items
@@ -324,7 +322,7 @@ public class OrderBookService(
 
                 if (lotFields.RemainingQuantity > 0)
                 {
-                    var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(lotFields.ItemConfigId,
+                    var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(aucyDb, lotFields.ItemConfigId,
                         lotFields.RemainingQuantity, userId);
 
                     float usedWeightDiff = 0;
@@ -332,7 +330,7 @@ public class OrderBookService(
                     if (lotFields.ItemConfigWeight > 0)
                         usedWeightDiff = checked(lotFields.ItemConfigWeight * lotFields.RemainingQuantity);
 
-                    await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+                    await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
                 }
 
                 await transaction.CommitAsync();
@@ -451,7 +449,7 @@ public class OrderBookService(
                 // TODO: apply commission
 
                 if (returningMoney > 0)
-                    await _inventoryProperties.DepositMoney(userId, returningMoney);
+                    await _inventoryProperties.DepositMoney(aucyDb, userId, returningMoney);
 
                 await transaction.CommitAsync();
 
@@ -537,7 +535,7 @@ public class OrderBookService(
                 throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "You already have a bid with this item"));
 
             var reservedMoney = checked(request.BidPrice * request.TotalQuantity);
-            await _inventoryProperties.WithdrawMoney(userId, reservedMoney);
+            await _inventoryProperties.WithdrawMoney(aucyDb, userId, reservedMoney);
 
             var bid = Bid.Create(
                 bidderUserId: userId,
@@ -609,7 +607,7 @@ public class OrderBookService(
                 throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument,
                     "Bid price should be equal to lot price for unary item"));
 
-            await _inventoryProperties.WithdrawMoney(userId, lotFields.UnitPrice);
+            await _inventoryProperties.WithdrawMoney(aucyDb, userId, lotFields.UnitPrice);
 
             var updatedLots = await aucyDb.Lots.Where(x => x.Id == lotFields.Id)
                 .ExecuteUpdateAsync(x => x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - 1));
@@ -681,7 +679,6 @@ public class OrderBookService(
             IDistributedSynchronizationHandle? rwItemLock = null;
             IDistributedSynchronizationHandle? unaryLock = null;
 
-
             if (!itemConfigFields.IsUnary)
             {
                 userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId))
@@ -743,7 +740,7 @@ public class OrderBookService(
 
                 var returningMoney = checked(bidFields.BidPrice * bidFields.RemainingQuantity);
                 if (returningMoney > 0)
-                    await _inventoryProperties.DepositMoney(userId, returningMoney);
+                    await _inventoryProperties.DepositMoney(aucyDb, userId, returningMoney);
 
                 // Bought items remain in bids. They will be collected by user manually.
 
@@ -861,7 +858,7 @@ public class OrderBookService(
                         $"Bid is not determined. Entries found: {bidsUpdated}"));
 
                 // Add purchased items to user's inventory
-                var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(bidFields.ItemConfigId,
+                var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(aucyDb, bidFields.ItemConfigId,
                     takeQuantity, userId);
 
                 // Alter inventory UsedWeight
@@ -870,7 +867,7 @@ public class OrderBookService(
                 if (bidFields.ItemConfigWeight > 0)
                     usedWeightDiff = checked(bidFields.ItemConfigWeight * takeQuantity);
 
-                await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+                await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
 
                 await transaction.CommitAsync();
 

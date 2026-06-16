@@ -20,8 +20,8 @@ namespace Aucy.Application;
 
 [Authorize]
 public class InventoryService(
-    InventoryPropertiesService inventoryPropertiesService,
-    ItemsService itemsService,
+    InventoryPropertiesHelper inventoryPropertiesService,
+    ItemsHelper itemsService,
     IDbContextFactory<AucyDbContext> aucyDbFactory,
     IMapper mapper) : ServiceBase<IInventoryService>,
 #pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
@@ -30,8 +30,8 @@ public class InventoryService(
 
 {
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
-    private readonly InventoryPropertiesService _inventoryProperties = inventoryPropertiesService;
-    private readonly ItemsService _itemsService = itemsService;
+    private readonly InventoryPropertiesHelper _inventoryProperties = inventoryPropertiesService;
+    private readonly ItemsHelper _itemsService = itemsService;
     private readonly IMapper _mapper = mapper;
 
     public async UnaryResult<Nil> AddItemStack(AddItemStackDto request)
@@ -97,10 +97,10 @@ public class InventoryService(
                 }
 
                 // Try to update an existing ItemStack with the same ConfigId or create new one if not found
-                var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(itemConfig.Id, request.Quantity,
+                var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(aucyDb, itemConfig.Id, request.Quantity,
                     inventoryFields.Id);
 
-                await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+                await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
 
                 await transaction.CommitAsync();
 
@@ -130,7 +130,9 @@ public class InventoryService(
 
         try
         {
-            await _inventoryProperties.DepositMoney(userId, moneyToAdd);
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
+
+            await _inventoryProperties.DepositMoney(aucyDb, userId, moneyToAdd);
 
             return Nil.Default;
         }
@@ -150,7 +152,9 @@ public class InventoryService(
 
         try
         {
-            await _inventoryProperties.DepositMoney(userId, moneyToTake);
+            using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
+
+            await _inventoryProperties.DepositMoney(aucyDb, userId, moneyToTake);
 
             return Nil.Default;
         }
@@ -249,7 +253,7 @@ public class InventoryService(
                 if (itemStackFields.ConfigWeight > 0)
                     usedWeightDiff = -itemStackFields.ConfigWeight * request.Quantity;
 
-                await _inventoryProperties.ExecuteInventoryUpdate(userId, usedWeightDiff, usedCapacityDiff);
+                await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
 
                 await transaction.CommitAsync();
 

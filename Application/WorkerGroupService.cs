@@ -1,7 +1,5 @@
 ﻿using Aucy.Contracts.OnionClient;
 using Cysharp.Runtime.Multicast;
-using System;
-using System.Threading.Tasks;
 
 namespace Aucy.Application;
 
