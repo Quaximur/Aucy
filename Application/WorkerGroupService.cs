@@ -35,8 +35,13 @@ public class WorkerGroupService(IMulticastGroupProvider groupProvider) : IDispos
 
     public async ValueTask AddMember(Guid userId, Guid connectionId, IWorkerHubReceiver receiver)
     {
-        var connections = _userConnectionsMap.GetOrAdd(userId, _ => new ConcurrentDictionary<Guid, byte>());
-        connections.TryAdd(connectionId, 0);
+        var connections = _userConnectionsMap.AddOrUpdate(userId,
+            x => new ConcurrentDictionary<Guid, byte>() { [connectionId] = 0 },
+            (k, map) =>
+            {
+                map[connectionId] = 0;
+                return map;
+            });
 
         await _group.AddAsync(connectionId, receiver);
     }
