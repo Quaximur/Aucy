@@ -50,10 +50,13 @@ public class WorkerGroupService(IMulticastGroupProvider groupProvider) : IDispos
     {
         if (_userConnectionsMap.TryGetValue(userId, out var connections))
         {
-            connections.TryRemove(connectionId, out _);
+            lock (connections) // TODO: check this lock
+            {
+                connections.TryRemove(connectionId, out _);
 
-            if (connections.IsEmpty)
-                _userConnectionsMap.TryRemove(userId, out _);
+                if (connections.IsEmpty)
+                    _userConnectionsMap.TryRemove(userId, out _);
+            }
         }
 
         await _group.RemoveAsync(connectionId);
