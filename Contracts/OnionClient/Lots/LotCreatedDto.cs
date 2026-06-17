@@ -11,13 +11,15 @@ namespace Aucy.Contracts.OnionClient
         [Key(1)] public ItemConfigDto ItemConfig { get; set; }
         [Key(2)] public long UnitPrice { get; set; }
         [Key(3)] public int TotalQuantity { get; set; }
+        [Key(4)] public DateTime CreatedAt { get; set; }
 
-        public LotCreatedDto(Guid lotId, ItemConfigDto itemConfig, long unitPrice, int totalQuantity)
+        public LotCreatedDto(Guid lotId, ItemConfigDto itemConfig, long unitPrice, int totalQuantity, DateTime createdAt)
         {
             LotId = lotId;
             ItemConfig = itemConfig;
             UnitPrice = unitPrice;
             TotalQuantity = totalQuantity;
+            CreatedAt = createdAt;
         }
     }
 }

@@ -727,16 +727,16 @@ public class OrderBookService(
                                 .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - remainingQuantity);
                         });
                 }
-                else // all items are unsold, we can just delete the bid)
+                else // All items are unsold. Just delete the bid
                 {
                     bidsUpdated = await aucyDb.Bids
-                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId && b.RemainingQuantity == b.TotalQuantity)
                         .ExecuteDeleteAsync();
                 }
 
                 if (bidsUpdated != 1)
                     throw new RpcException(new Status(StatusCode.NotFound,
-                        $"Bid is not determined. Entries found: {bidsUpdated}"));
+                        $"Bid is not determined or lacks of quantity. Entries found: {bidsUpdated}"));
 
                 var returningMoney = checked(bidFields.BidPrice * bidFields.RemainingQuantity);
                 if (returningMoney > 0)
