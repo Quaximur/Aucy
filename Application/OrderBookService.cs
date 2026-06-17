@@ -35,7 +35,7 @@ public class OrderBookService(
     private readonly IDistributedLockProvider _lockProvider = lockProvider;
     private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
 
-    public async UnaryResult<LotDto> CreateLot(CreateLotDto request)
+    public async UnaryResult<LotCreatedDto> CreateLot(CreateLotDto request)
     {
         var userId = Context.GetUserId();
 
@@ -49,22 +49,29 @@ public class OrderBookService(
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        var itemConfigFields = await aucyDb.ItemConfigs
+        var itemConfig = await aucyDb.ItemConfigs
             .Where(x => x.Id == request.ItemConfigId)
-            .Select(x => new { x.IsUnary, x.Weight })
+            .Select(x => _mapper.Map<ItemConfigDto>(x))
             .FirstOrDefaultAsync()
                     ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            if (!itemConfigFields.IsUnary)
-                return await SellNonUnary(userId, request, aucyDb, itemConfigFields.Weight);
+            if (!itemConfig.IsUnary)
+            {
+                var lotCreatedDto = await SellNonUnary(userId, request, aucyDb, itemConfig);
+                return lotCreatedDto;
+            }
             else
-                return await SellUnary(userId, request, aucyDb, itemConfigFields.Weight);
+            {
+                var lotCreatedDto = await SellUnary(userId, request, aucyDb, itemConfig);
+                return lotCreatedDto;
+            }
         });
     }
 
-    private async UnaryResult<LotDto> SellNonUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, float itemWeight)
+    private async UnaryResult<LotCreatedDto> SellNonUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb,
+        ItemConfigDto itemConfigDto)
     {
         var itemConfigId = request.ItemConfigId;
 
@@ -107,8 +114,8 @@ public class OrderBookService(
             float usedWeightDiff = 0;
 
             // Can be applied by parts in cycle if numbers are too big.
-            if (itemWeight > 0)
-                usedWeightDiff = checked(-itemWeight * request.TotalQuantity);
+            if (itemConfigDto.Weight > 0)
+                usedWeightDiff = checked(-itemConfigDto.Weight * request.TotalQuantity);
 
             await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
 
@@ -128,7 +135,11 @@ public class OrderBookService(
 
             Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
 
-            return _mapper.Map<LotDto>(lot);
+            return new LotCreatedDto(lotId: lot.Id,
+                itemConfig: itemConfigDto,
+                unitPrice: lot.UnitPrice,
+                totalQuantity: lot.TotalQuantity,
+                createdAt: lot.CreatedAt);
         }
         catch (OverflowException)
         {
@@ -148,7 +159,7 @@ public class OrderBookService(
         }
     }
 
-    private async UnaryResult<LotDto> SellUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, float itemWeight)
+    private async UnaryResult<LotCreatedDto> SellUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, ItemConfigDto itemConfigDto)
     {
         if (request.TotalQuantity != 1)
             throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be 1 for unary item"));
@@ -184,8 +195,8 @@ public class OrderBookService(
             float usedWeightDiff = 0;
 
             // Can be applied by parts in cycle if numbers are too large.
-            if (itemWeight > 0)
-                usedWeightDiff = checked(-itemWeight * request.TotalQuantity);
+            if (itemConfigDto.Weight > 0)
+                usedWeightDiff = checked(-itemConfigDto.Weight * request.TotalQuantity);
 
             await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, weightDiff: usedWeightDiff,
                 capacityDiff: usedCapacityDiff);
@@ -201,7 +212,11 @@ public class OrderBookService(
             await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return _mapper.Map<LotDto>(lot);
+            return new LotCreatedDto(lotId: lot.Id,
+                itemConfig: itemConfigDto,
+                unitPrice: lot.UnitPrice,
+                totalQuantity: lot.TotalQuantity,
+                createdAt: lot.CreatedAt);
         }
         catch (OverflowException)
         {
@@ -239,7 +254,7 @@ public class OrderBookService(
     /// <summary>
     /// Remove lot from selling, but leave sold quantity untouched
     /// </summary>
-    public async UnaryResult<Guid> RemoveLot(RemoveLotDto request)
+    public async UnaryResult<LotRemovedDto> RemoveLot(RemoveLotDto request)
     {
         var userId = Context.GetUserId();
 
@@ -247,9 +262,9 @@ public class OrderBookService(
         {
             using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-            var itemConfigFields = await aucyDb.Lots
+            var itemConfigDto = await aucyDb.Lots
                 .Where(x => x.Id == request.LotId && x.ItemConfig != null)
-                .Select(x => new { x.ItemConfigId, x.ItemConfig.IsUnary })
+                .Select(x => _mapper.Map<ItemConfigDto>(x))
                 .FirstOrDefaultAsync()
                     ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
@@ -257,14 +272,14 @@ public class OrderBookService(
             IDistributedSynchronizationHandle? rwItemLock = null;
             IDistributedSynchronizationHandle? unaryLock = null;
 
-            if (!itemConfigFields.IsUnary)
+            if (!itemConfigDto.IsUnary)
             {
-                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId))
+                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigDto.Id, userId))
                     ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
                         "Some of your operations with this item is already processing"));
 
                 // wait for matching worker if not unary
-                rwItemLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigFields.ItemConfigId));
+                rwItemLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigDto.Id));
             }
             else
             {
@@ -273,11 +288,11 @@ public class OrderBookService(
                 if (!isOwnLot)
                     throw new NoRetryRpcException(new Status(StatusCode.PermissionDenied, "You have no permission to modify this lot"));
 
-                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryUserLock(itemConfigFields.ItemConfigId, userId))
+                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryUserLock(itemConfigDto.Id, userId))
                     ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
                         "Some of your operations with this item is already processing"));
 
-                unaryLock = await _lockProvider.AcquireLockAsync(Keys.GetUnaryLock(itemConfigFields.ItemConfigId));
+                unaryLock = await _lockProvider.AcquireLockAsync(Keys.GetUnaryLock(itemConfigDto.Id));
             }
 
             var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
@@ -294,50 +309,47 @@ public class OrderBookService(
                         b.TotalQuantity,
                         b.RemainingQuantity,
                     })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, 
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
                         "Nothing to remove or Lot doesn`t exist"));
 
                 int lotsUpdated = 0;
+                var quantityToRemove = lotFields.RemainingQuantity;
 
-                if (lotFields.RemainingQuantity < lotFields.TotalQuantity) // remove only unsold quantity
+                if (quantityToRemove < lotFields.TotalQuantity) // remove only unsold quantity
                 {
-                    var remainingQuantity = lotFields.RemainingQuantity;
                     lotsUpdated = await aucyDb.Lots
-                        .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                        .Where(l => l.Id == request.LotId && l.OwnerUserId == userId && l.RemainingQuantity >= quantityToRemove)
                         .ExecuteUpdateAsync(x =>
                         {
-                            x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - remainingQuantity)
-                                .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - remainingQuantity);
+                            x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - quantityToRemove)
+                                .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - quantityToRemove);
                         });
                 }
                 else
                 {
                     lotsUpdated = await aucyDb.Lots
-                        .Where(l => l.Id == request.LotId && l.OwnerUserId == userId && 
-                            l.RemainingQuantity == l.TotalQuantity)
+                        .Where(l => l.Id == request.LotId && l.OwnerUserId == userId &&
+                            l.RemainingQuantity == quantityToRemove && l.TotalQuantity == quantityToRemove)
                         .ExecuteDeleteAsync();
                 }
 
                 if (lotsUpdated != 1)
                     throw new RpcException(new Status(StatusCode.NotFound,
-                        $"Lot is not determined. Entries found: {lotsUpdated}"));
+                        $"Lot is not determined or remaining quantity has been changed during operation. Entries found: {lotsUpdated}"));
 
-                if (lotFields.RemainingQuantity > 0)
-                {
-                    var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(aucyDb, lotFields.ItemConfigId,
-                        lotFields.RemainingQuantity, userId);
+                var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(aucyDb, lotFields.ItemConfigId,
+                       quantityToRemove, userId);
 
-                    float usedWeightDiff = 0;
+                float usedWeightDiff = 0;
 
-                    if (lotFields.ItemConfigWeight > 0)
-                        usedWeightDiff = checked(lotFields.ItemConfigWeight * lotFields.RemainingQuantity);
+                if (lotFields.ItemConfigWeight > 0)
+                    usedWeightDiff = checked(lotFields.ItemConfigWeight * quantityToRemove);
 
-                    await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
-                }
+                await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
 
                 await transaction.CommitAsync();
 
-                return request.LotId;
+                return new LotRemovedDto(lotId: request.LotId, itemConfig: itemConfigDto, removedQuantity: quantityToRemove);
             }
             catch (OverflowException)
             {
@@ -367,7 +379,7 @@ public class OrderBookService(
         });
     }
 
-    public async UnaryResult<Guid> CollectLot(CollectLotDto request)
+    public async UnaryResult<LotCollectedDto> CollectLot(CollectLotDto request)
     {
         var userId = Context.GetUserId();
 
@@ -400,7 +412,7 @@ public class OrderBookService(
             try
             {
                 var lotFields = await aucyDb.Lots
-                    .Where(l => l.Id == request.LotId && l.OwnerUserId == userId && 
+                    .Where(l => l.Id == request.LotId && l.OwnerUserId == userId &&
                         l.TotalQuantity - l.RemainingQuantity >= request.Quantity)
                     .Select(b => new
                     {
@@ -450,12 +462,13 @@ public class OrderBookService(
                 var returningMoney = checked(lotFields.UnitPrice * takeQuantity + lotFields.ExtraSoldoutMoney);
                 // TODO: apply commission
 
-                if (returningMoney > 0)
-                    await _inventoryProperties.DepositMoney(aucyDb, userId, returningMoney);
+                await _inventoryProperties.DepositMoney(aucyDb, userId, returningMoney);
 
                 await transaction.CommitAsync();
 
-                return request.LotId;
+                return new LotCollectedDto(lotId: lotFields.Id, 
+                    returningMoney: returningMoney, 
+                    collectedQuantity: takeQuantity);
             }
             catch (OverflowException)
             {
@@ -481,7 +494,7 @@ public class OrderBookService(
         });
     }
 
-    public async UnaryResult<BidDto> CreateBid(CreateBidDto request)
+    public async UnaryResult<BidCreatedDto> CreateBid(CreateBidDto request)
     {
         var userId = Context.GetUserId();
 
@@ -493,22 +506,23 @@ public class OrderBookService(
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        var itemConfigFields = await aucyDb.ItemConfigs
+        var itemConfigDto = await aucyDb.ItemConfigs
                 .Where(x => x.Id == request.ItemConfigId)
-                .Select(x => new { x.IsUnary })
+                .Select(x => _mapper.Map<ItemConfigDto>(x))
                 .FirstOrDefaultAsync()
                      ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            if (!itemConfigFields.IsUnary)
-                return await BuyNonUnary(userId, request, aucyDb);
+            if (!itemConfigDto.IsUnary)
+                return await BuyNonUnary(userId, request, aucyDb, itemConfigDto);
             else
-                return await BuyUnary(userId, request, aucyDb);
+                return await BuyUnary(userId, request, aucyDb, itemConfigDto);
         });
     }
 
-    private async UnaryResult<BidDto> BuyNonUnary(Guid userId, CreateBidDto request, AucyDbContext aucyDb)
+    private async UnaryResult<BidCreatedDto> BuyNonUnary(Guid userId, CreateBidDto request, AucyDbContext aucyDb, 
+        ItemConfigDto itemConfigDto)
     {
         var itemConfigId = request.ItemConfigId;
 
@@ -552,7 +566,11 @@ public class OrderBookService(
             await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return _mapper.Map<BidDto>(bid);
+            return new BidCreatedDto(bidId: bid.Id, 
+                itemConfig: itemConfigDto, 
+                bidPrice: bid.BidPrice, 
+                totalQuantity: bid.TotalQuantity, 
+                createdAt: bid.CreatedAt);
         }
         catch (OverflowException)
         {
@@ -572,7 +590,8 @@ public class OrderBookService(
         }
     }
 
-    private async UnaryResult<BidDto> BuyUnary(Guid userId, CreateBidDto request, AucyDbContext aucyDb)
+    private async UnaryResult<BidCreatedDto> BuyUnary(Guid userId, CreateBidDto request, AucyDbContext aucyDb,
+        ItemConfigDto itemConfigDto)
     {
         if (request.TotalQuantity != 1)
             throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Total quantity should be 1 for unary item"));
@@ -633,7 +652,11 @@ public class OrderBookService(
             await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return _mapper.Map<BidDto>(bid);
+            return new BidCreatedDto(bidId: bid.Id,
+                itemConfig: itemConfigDto,
+                bidPrice: bid.BidPrice,
+                totalQuantity: bid.TotalQuantity,
+                createdAt: bid.CreatedAt);
         }
         catch (RpcException)
         {
@@ -663,7 +686,7 @@ public class OrderBookService(
         return new OwnBidsDto(ownBids);
     }
 
-    public async UnaryResult<Guid> RemoveBid(RemoveBidDto request)
+    public async UnaryResult<BidRemovedDto> RemoveBid(RemoveBidDto request)
     {
         var userId = Context.GetUserId();
 
@@ -714,34 +737,35 @@ public class OrderBookService(
                         b.RemainingQuantity,
                         b.BidPrice
                     })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, 
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
                         "Nothing to remove or Bid doesn`t exist"));
 
                 int bidsUpdated = 0;
+                var quantityToRemove = bidFields.RemainingQuantity;
 
-                if (bidFields.RemainingQuantity < bidFields.TotalQuantity) // If some items were bought, remove only unbought quantity
+                if (quantityToRemove < bidFields.TotalQuantity) // If some items were bought, remove only unbought quantity
                 {
-                    var remainingQuantity = bidFields.RemainingQuantity;
                     bidsUpdated = await aucyDb.Bids
-                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId && b.RemainingQuantity >= quantityToRemove)
                         .ExecuteUpdateAsync(x =>
                         {
-                            x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - remainingQuantity)
-                                .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - remainingQuantity);
+                            x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - quantityToRemove)
+                                .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - quantityToRemove);
                         });
                 }
                 else // All items are unsold. Just delete the bid
                 {
                     bidsUpdated = await aucyDb.Bids
-                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId && b.RemainingQuantity == b.TotalQuantity)
+                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId && 
+                            b.RemainingQuantity == quantityToRemove && b.TotalQuantity == quantityToRemove)
                         .ExecuteDeleteAsync();
                 }
 
                 if (bidsUpdated != 1)
                     throw new RpcException(new Status(StatusCode.NotFound,
-                        $"Bid is not determined or lacks of quantity. Entries found: {bidsUpdated}"));
+                        $"Bid is not determined or remaining quantity has been changed during operation. Entries found: {bidsUpdated}"));
 
-                var returningMoney = checked(bidFields.BidPrice * bidFields.RemainingQuantity);
+                var returningMoney = checked(bidFields.BidPrice * quantityToRemove);
                 if (returningMoney > 0)
                     await _inventoryProperties.DepositMoney(aucyDb, userId, returningMoney);
 
@@ -749,7 +773,9 @@ public class OrderBookService(
 
                 await transaction.CommitAsync();
 
-                return request.BidId;
+                return new BidRemovedDto(bidId: bidFields.Id, 
+                    returningMoney: returningMoney, 
+                    removedQuantity: quantityToRemove);
             }
             catch (OverflowException)
             {
@@ -780,7 +806,7 @@ public class OrderBookService(
         });
     }
 
-    public async UnaryResult<Guid> CollectBid(CollectBidDto request)
+    public async UnaryResult<BidCollectedDto> CollectBid(CollectBidDto request)
     {
         var userId = Context.GetUserId();
 
@@ -791,18 +817,18 @@ public class OrderBookService(
         {
             using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-            var itemConfigFields = await aucyDb.Bids
+            var itemConfigDto = await aucyDb.Bids
                 .Where(x => x.Id == request.BidId && x.ItemConfig != null)
-                .Select(x => new { x.ItemConfig.IsUnary, x.ItemConfigId })
+                .Select(x => _mapper.Map<ItemConfigDto>(x))
                 .FirstOrDefaultAsync()
                     ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Bid or Item config doesn't exist"));
 
             // No worker lock needed
             // No Non-User Unary lock needed 
             // (Concurrent Sale -> RemainingQuantity decrease -> still correct calculation with quantity diff)
-            var userLockKey = itemConfigFields.IsUnary ?
-                    Keys.GetUnaryUserLock(itemConfigFields.ItemConfigId, userId) :
-                    Keys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId);
+            var userLockKey = itemConfigDto.IsUnary ?
+                    Keys.GetUnaryUserLock(itemConfigDto.Id, userId) :
+                    Keys.GetNonUnaryUserLock(itemConfigDto.Id, userId);
 
             using var userLock = await _lockProvider.TryAcquireLockAsync(userLockKey)
                 ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
@@ -824,7 +850,7 @@ public class OrderBookService(
                         b.RemainingQuantity,
                         b.BidPrice
                     })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, 
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
                         "Bid doesn't exist or remaining quantity is less than needed"));
 
                 // Check if any items were bought
@@ -877,7 +903,9 @@ public class OrderBookService(
 
                 await transaction.CommitAsync();
 
-                return request.BidId;
+                return new BidCollectedDto(bidId: bidFields.Id, 
+                    itemConfig: itemConfigDto, 
+                    collectedQuantity: takeQuantity);
             }
             catch (OverflowException)
             {

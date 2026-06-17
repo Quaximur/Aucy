@@ -13,5 +13,12 @@ namespace Aucy.Contracts.OnionClient
         [Key(0)] public Guid BidId { get; set; }
         [Key(1)] public long ReturningMoney { get; set; }
         [Key(2)] public int RemovedQuantity { get; set; } 
+
+        public BidRemovedDto(Guid bidId,  long returningMoney, int removedQuantity)
+        {
+            BidId = bidId;
+            ReturningMoney = returningMoney;
+            RemovedQuantity = removedQuantity;
+        }
     }
 }

@@ -12,8 +12,15 @@ namespace Aucy.Contracts.OnionClient
     [MessagePackObject]
     public class BidCollectedDto
     {
-        [Key(0)] public Guid LotId { get; set; }
+        [Key(0)] public Guid BidId { get; set; }
         [Key(1)] public ItemConfigDto ItemConfig { get; set; }
         [Key(2)] public int CollectedQuantity { get; set; }
+
+        public BidCollectedDto(Guid bidId, ItemConfigDto itemConfig, int collectedQuantity)
+        {
+            BidId = bidId;
+            ItemConfig = itemConfig;
+            CollectedQuantity = collectedQuantity;
+        }
     }
 }
