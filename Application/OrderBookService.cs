@@ -68,10 +68,10 @@ public class OrderBookService(
     {
         var itemConfigId = request.ItemConfigId;
 
-		using var userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigId, userId))
-			?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Some of your operations with this item is already processing"));
+        using var userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigId, userId))
+            ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Some of your operations with this item is already processing"));
 
-		using var rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigId));
+        using var rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigId));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -285,7 +285,7 @@ public class OrderBookService(
             try
             {
                 var lotFields = await aucyDb.Lots
-                    .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                    .Where(l => l.Id == request.LotId && l.OwnerUserId == userId && l.RemainingQuantity > 0)
                     .Select(b => new
                     {
                         b.Id,
@@ -294,7 +294,8 @@ public class OrderBookService(
                         b.TotalQuantity,
                         b.RemainingQuantity,
                     })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Lot doesn`t exist"));
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, 
+                        "Nothing to remove or Lot doesn`t exist"));
 
                 int lotsUpdated = 0;
 
@@ -312,7 +313,8 @@ public class OrderBookService(
                 else
                 {
                     lotsUpdated = await aucyDb.Lots
-                        .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                        .Where(l => l.Id == request.LotId && l.OwnerUserId == userId && 
+                            l.RemainingQuantity == l.TotalQuantity)
                         .ExecuteDeleteAsync();
                 }
 
@@ -398,7 +400,8 @@ public class OrderBookService(
             try
             {
                 var lotFields = await aucyDb.Lots
-                    .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                    .Where(l => l.Id == request.LotId && l.OwnerUserId == userId && 
+                        l.TotalQuantity - l.RemainingQuantity >= request.Quantity)
                     .Select(b => new
                     {
                         b.Id,
@@ -409,7 +412,7 @@ public class OrderBookService(
                         b.UnitPrice,
                         b.ExtraSoldoutMoney
                     })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Lot doesn`t exist"));
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Lot doesn`t exist or remaining quantity is less than needed"));
 
                 if (lotFields.RemainingQuantity == lotFields.TotalQuantity)
                     throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "There are no sold items in the lot"));
@@ -420,30 +423,29 @@ public class OrderBookService(
                 if (takeQuantity > soldQuantity)
                     throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Requested quantity exceeds the sold quantity in the lot"));
 
-                if (takeQuantity < soldQuantity)
+                int updatedLots;
+
+                if (takeQuantity < lotFields.TotalQuantity)
                 {
-                    var updatedLots = await aucyDb.Lots
+                    updatedLots = await aucyDb.Lots
                         .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
                         .ExecuteUpdateAsync(x =>
                         {
                             x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - takeQuantity)
                                 .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
                         });
-
-                    if (updatedLots != 1)
-                        throw new NoRetryRpcException(new Status(StatusCode.NotFound,
-                            $"Lot is not determined. Entries found: {updatedLots}"));
                 }
                 else // lot is sold
                 {
-                    var updatedLots = await aucyDb.Lots
-                        .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
+                    updatedLots = await aucyDb.Lots
+                        .Where(l => l.Id == request.LotId && l.OwnerUserId == userId &&
+                            l.RemainingQuantity == 0 && l.TotalQuantity == takeQuantity)
                         .ExecuteDeleteAsync();
-
-                    if (updatedLots != 1)
-                        throw new NoRetryRpcException(new Status(StatusCode.NotFound,
-                            $"Lot is not determined. Entries found: {updatedLots}"));
                 }
+
+                if (updatedLots != 1)
+                    throw new NoRetryRpcException(new Status(StatusCode.NotFound,
+                        $"Lot is not determined (or lack of quantity). Entries found: {updatedLots}"));
 
                 var returningMoney = checked(lotFields.UnitPrice * takeQuantity + lotFields.ExtraSoldoutMoney);
                 // TODO: apply commission
@@ -702,7 +704,7 @@ public class OrderBookService(
             try
             {
                 var bidFields = await aucyDb.Bids
-                    .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                    .Where(b => b.Id == request.BidId && b.BidderUserId == userId && b.RemainingQuantity > 0)
                     .Select(b => new
                     {
                         b.Id,
@@ -712,7 +714,8 @@ public class OrderBookService(
                         b.RemainingQuantity,
                         b.BidPrice
                     })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Bid doesn`t exist"));
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, 
+                        "Nothing to remove or Bid doesn`t exist"));
 
                 int bidsUpdated = 0;
 
@@ -810,7 +813,8 @@ public class OrderBookService(
             try
             {
                 var bidFields = await aucyDb.Bids
-                    .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                    .Where(b => b.Id == request.BidId && b.BidderUserId == userId &&
+                        b.TotalQuantity - b.RemainingQuantity >= request.Quantity)
                     .Select(b => new
                     {
                         b.Id,
@@ -820,7 +824,8 @@ public class OrderBookService(
                         b.RemainingQuantity,
                         b.BidPrice
                     })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, "Bid doesn't exist"));
+                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, 
+                        "Bid doesn't exist or remaining quantity is less than needed"));
 
                 // Check if any items were bought
                 if (bidFields.RemainingQuantity == bidFields.TotalQuantity)
@@ -828,14 +833,14 @@ public class OrderBookService(
 
                 var boughtQuantity = bidFields.TotalQuantity - bidFields.RemainingQuantity;
 
-                if (request.Quantity > boughtQuantity)
+                var takeQuantity = request.Quantity;
+
+                if (takeQuantity > boughtQuantity)
                     throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Requested quantity exceeds the purchased quantity in the bid"));
 
                 int bidsUpdated;
 
-                var takeQuantity = request.Quantity;
-
-                if (takeQuantity < boughtQuantity)
+                if (takeQuantity < bidFields.TotalQuantity)
                 {
                     bidsUpdated = await aucyDb.Bids
                         .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
@@ -849,7 +854,8 @@ public class OrderBookService(
                 {
                     // Collect all purchased items - delete the bid entirely
                     bidsUpdated = await aucyDb.Bids
-                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                        .Where(b => b.Id == request.BidId && b.BidderUserId == userId &&
+                            b.RemainingQuantity == 0 && b.TotalQuantity == takeQuantity)
                         .ExecuteDeleteAsync();
                 }
 
