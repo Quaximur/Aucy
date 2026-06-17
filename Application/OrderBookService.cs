@@ -437,7 +437,7 @@ public class OrderBookService(
                 else // lot is sold
                 {
                     var updatedLots = await aucyDb.Lots
-                        .Where(l => l.Id == request.LotId && l.OwnerUserId == userId && l.RemainingQuantity == l.TotalQuantity)
+                        .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
                         .ExecuteDeleteAsync();
 
                     if (updatedLots != 1)
