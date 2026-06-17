@@ -218,8 +218,8 @@ public class OrderHub(WorkerGroupService workerGroupService,
             return new LotCreatedDto(lotId: lot.Id,
                 itemConfig: itemConfigDto,
                 unitPrice: lot.UnitPrice,
-                totalQuantity:
-                lot.TotalQuantity);
+                totalQuantity: lot.TotalQuantity,
+                createdAt: lot.CreatedAt);
         }
         catch (OverflowException)
         {
@@ -296,7 +296,8 @@ public class OrderHub(WorkerGroupService workerGroupService,
             return new LotCreatedDto(lotId: lot.Id,
                 itemConfig: itemConfigDto,
                 unitPrice: lot.UnitPrice,
-                totalQuantity: lot.TotalQuantity);
+                totalQuantity: lot.TotalQuantity,
+                createdAt: lot.CreatedAt);
         }
         catch (OverflowException)
         {
