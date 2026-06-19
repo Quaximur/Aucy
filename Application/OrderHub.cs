@@ -1,17 +1,11 @@
-﻿using Aucy.Application.Exceptions;
-using Aucy.Application.Helpers;
+﻿using Aucy.Application.Helpers;
 using Aucy.Contracts.OnionClient;
 using Aucy.Data;
-using Aucy.Domain.Entities;
 using AutoMapper;
 using Grpc.Core;
-using MagicOnion;
 using MagicOnion.Server.Hubs;
-using Medallion.Threading;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Polly;
-using Polly.Retry;
 using System.Data;
 
 namespace Aucy.Application;
@@ -25,12 +19,12 @@ namespace Aucy.Application;
 
 [Authorize]
 public class OrderHub(WorkerGroupService workerGroupService,
-    IOrderBookService orderBookService,
+    IOrderBookHelper orderBookHelper,
     IDbContextFactory<AucyDbContext> aucyDbFactory,
     IMapper mapper) : StreamingHubBase<IOrderHub, IOrderHubReceiver>, IOrderHub
 {
     private readonly WorkerGroupService _workerGroupService = workerGroupService; // for SSE (global group)
-    private readonly IOrderBookService _orderBookService = orderBookService;
+    private readonly IOrderBookHelper _orderBookHelper = orderBookHelper;
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
     private readonly IMapper _mapper = mapper;
 
@@ -95,42 +89,42 @@ public class OrderHub(WorkerGroupService workerGroupService,
 
     public async ValueTask CreateBid(CreateBidDto request)
     {
-        var bidCreated = await _orderBookService.CreateBid(request);
+        var bidCreated = await _orderBookHelper.CreateBid(_userId, request);
 
         Client.OnBidCreated(bidCreated);
     }
 
     public async ValueTask CollectBid(CollectBidDto request)
     {
-        var bidCollected = await _orderBookService.CollectBid(request);
+        var bidCollected = await _orderBookHelper.CollectBid(_userId, request);
 
         Client.OnBidCollected(bidCollected);
     }
 
     public async ValueTask RemoveBid(RemoveBidDto request)
     {
-        var bidRemoved = await _orderBookService.RemoveBid(request);
+        var bidRemoved = await _orderBookHelper.RemoveBid(_userId, request);
 
         Client.OnBidRemoved(bidRemoved);
     }
 
     public async ValueTask CreateLot(CreateLotDto request)
     {
-        var lotCreated = await _orderBookService.CreateLot(request);
+        var lotCreated = await _orderBookHelper.CreateLot(_userId, request);
 
         Client.OnLotCreated(lotCreated);
     }
 
     public async ValueTask CollectLot(CollectLotDto request)
     {
-        var lotCollected = await _orderBookService.CollectLot(request);
+        var lotCollected = await _orderBookHelper.CollectLot(_userId, request);
 
         Client.OnLotCollected(lotCollected);
     }
 
     public async ValueTask RemoveLot(RemoveLotDto request)
     {
-        var lotRemoved = await _orderBookService.RemoveLot(request);
+        var lotRemoved = await _orderBookHelper.RemoveLot(_userId, request);
 
         Client.OnLotRemoved(lotRemoved);
     }

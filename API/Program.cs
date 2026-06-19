@@ -3,6 +3,7 @@ using Aucy.Application;
 using Aucy.Application.Auth;
 using Aucy.Application.Helpers;
 using Aucy.Application.Mappings;
+using Aucy.Contracts.OnionClient;
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -28,6 +29,7 @@ builder.Logging.AddConsole();
 builder.Logging.SetMinimumLevel(LogLevel.Information);
 
 services.AddMagicOnion();
+services.AddSingleton<IOrderBookHelper, OrderBookHelper>();
 
 services.AddTransient<OrderBookWorker>();
 
@@ -78,9 +80,9 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapMagicOnionService<OrderBookService>();
+//app.MapMagicOnionService<OrderBookService>();
 app.MapMagicOnionService<InventoryService>();
-app.MapMagicOnionService<InventoryLayoutService>();
+//app.MapMagicOnionService<InventoryLayoutService>();
 app.MapMagicOnionService<ItemSearchService>();
 app.MapMagicOnionService<ItemListingService>();
 app.MapMagicOnionService<OrderHub>();
