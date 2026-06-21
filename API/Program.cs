@@ -28,7 +28,20 @@ builder.AddDataServices();
 builder.Logging.AddConsole();
 builder.Logging.SetMinimumLevel(LogLevel.Information);
 
-services.AddMagicOnion();
+services.AddSingleton<RedisStartupCleanupService>();
+
+var redisConnectionString =
+           Environment.GetEnvironmentVariable("ConnectionStrings__Redis")
+           ?? builder.Configuration.GetConnectionString("Redis");
+
+if (string.IsNullOrWhiteSpace(redisConnectionString))
+    throw new NullReferenceException("Redis connection string not found");
+
+services.AddMagicOnion().UseRedisGroup(options =>
+{
+    options.ConnectionString = redisConnectionString;
+}, registerAsDefault: true);
+
 services.AddSingleton<IOrderBookHelper, OrderBookHelper>();
 
 services.AddTransient<OrderBookWorker>();
@@ -55,9 +68,12 @@ if (builder.Environment.IsDevelopment())
 var app = builder.Build();
 
 {
-    using IServiceScope s = app.Services.CreateScope();
+    using IServiceScope startupScope = app.Services.CreateScope();
 
-    using AucyDbContext ctx = s.ServiceProvider.GetRequiredService<AucyDbContext>();
+    var cleanup = startupScope.ServiceProvider.GetRequiredService<RedisStartupCleanupService>();
+    await cleanup.InitCleanupAsync(CancellationToken.None);
+
+    using AucyDbContext ctx = startupScope.ServiceProvider.GetRequiredService<AucyDbContext>();
 
     if (app.Environment.IsDevelopment())
     {

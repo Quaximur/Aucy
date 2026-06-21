@@ -1,0 +1,63 @@
+﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
+
+namespace Aucy.Application;
+
+public class RedisStartupCleanupService(
+    IConnectionMultiplexer redis,
+    ILogger<RedisStartupCleanupService> logger)
+{
+    private readonly IDatabase _db = redis.GetDatabase();
+    private readonly IServer _server = redis.GetServers().First(s => s.IsConnected);
+
+    public async Task InitCleanupAsync(CancellationToken cancellationToken)
+    {
+        var clearFlag = Environment.GetEnvironmentVariable("CLEAR_REDIS_ON_START"); // For Multi-node deployments
+        if (clearFlag == null || !clearFlag.Equals("true", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        await ClearLocksAsync(cancellationToken);
+        await ClearUserConnectionsAsync(cancellationToken);
+    }
+
+    private async Task ClearLocksAsync(CancellationToken cancellationToken)
+    {
+        // Match all known lock key patterns
+        string[] patterns =
+        [
+            "item_matching_*",
+            "item_unary_*",
+            "item_non_unary_user_*",
+            "item_unary_user_*",
+        ];
+
+        foreach (var pattern in patterns)
+        {
+            var deleted = await DeleteByPatternAsync(pattern);
+            logger.LogInformation("Cleared {Count} stale lock keys matching '{Pattern}'", deleted, pattern);
+        }
+    }
+
+    private async Task ClearUserConnectionsAsync(CancellationToken cancellationToken)
+    {
+        var deleted = await DeleteByPatternAsync("user-conns:*");
+        logger.LogInformation("Cleared {Count} stale user-connection keys", deleted);
+    }
+
+    private async Task<int> DeleteByPatternAsync(string pattern)
+    {
+        var keys = _server.KeysAsync(pattern: pattern);
+        int count = 0;
+
+        await foreach (var key in keys)
+        {
+            await _db.KeyDeleteAsync(key);
+            count++;
+        }
+
+        return count;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}

@@ -12,7 +12,5 @@ namespace Aucy.Contracts.OnionClient
         public UnaryResult<BidCreatedDto> CreateBid(CreateBidDto request);
         public UnaryResult<BidCollectedDto> CollectBid(CollectBidDto request);
         public UnaryResult<BidRemovedDto> RemoveBid(RemoveBidDto request); // TODO: partial items collecting. Only ExtraMoney withdraw.
-
-
     }
 }
