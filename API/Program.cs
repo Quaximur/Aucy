@@ -17,7 +17,7 @@ DotNetEnv.Env.TraversePath().Load();
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Listen(IPAddress.Any, 8765, listenOptions =>
+    options.Listen(IPAddress.Any, 5001, listenOptions =>
     {
         listenOptions.Protocols = HttpProtocols.Http2;
     });
