@@ -34,41 +34,34 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
         try
         {
             // TODO: raw SQL or Redis with pre-calc in BackgroundWorker
-            var lotsQuery = _aucyDb.Lots
-                .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.IsMatched)
-                .Select(l => new { l.UnitPrice, l.RemainingQuantity });
-
-            var bidsQuery = _aucyDb.Bids
-                .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0 && b.IsMatched)
-                .Select(b => new { b.BidPrice, b.RemainingQuantity });
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var (lotsTask, bidsTask) = (
-                    lotsQuery
-                        .GroupBy(l => l.UnitPrice)
-                        .OrderByDescending(g => g.Key)
-                        .Select(g => new RawLotTuple(g.Key, g.Sum(l => l.RemainingQuantity)))
-                        .ToArrayAsync(cancellationToken),
-
-                    bidsQuery
-                        .GroupBy(b => b.BidPrice)
-                        .OrderByDescending(g => g.Key)
-                        .Select(g => new RawBidTuple(g.Key, g.Sum(b => b.RemainingQuantity)))
-                        .ToArrayAsync(cancellationToken)
-                );
-
-                await Task.WhenAll(lotsTask, bidsTask);
+                var lots = await _aucyDb.Lots
+                    .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.IsMatched)
+                    .Select(l => new { l.UnitPrice, l.RemainingQuantity })
+                    .GroupBy(l => l.UnitPrice)
+                    .OrderByDescending(g => g.Key)
+                    .Select(g => new RawLotTuple(g.Key, g.Sum(l => l.RemainingQuantity)))
+                    .ToArrayAsync(cancellationToken);
+                
+                var bids = await _aucyDb.Bids
+                    .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0 && b.IsMatched)
+                    .Select(b => new { b.BidPrice, b.RemainingQuantity })
+                    .GroupBy(b => b.BidPrice)
+                    .OrderByDescending(g => g.Key)
+                    .Select(g => new RawBidTuple(g.Key, g.Sum(b => b.RemainingQuantity)))
+                    .ToArrayAsync(cancellationToken);
 
                 var currentListing = new RawItemListingDto()
                 {
-                    RawLots = lotsTask.Result,
-                    RawBids = bidsTask.Result
+                    RawLots = lots,
+                    RawBids = bids
                 };
 
                 await stream.WriteAsync(currentListing);
 
-                await Task.Delay(1000, cancellationToken);
+                await Task.Delay(10000, cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
