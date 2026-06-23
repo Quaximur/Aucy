@@ -39,8 +39,18 @@ public class ItemConfig
     /// </summary>
     public List<string> Extra { get; set; } = [];
     public required string CategoryPath { get; set; }
+
+    [Range(1, 1_000_000_000_000_000)]
     public long MinPrice { get; set; }
+
+    [Range(1, 1_000_000_000_000_000)]
     public long MaxPrice { get; set; }
+
+    [Range(1, 5_000)]
+    public int MaxSellQuantity { get; set; }
+
+    [Range(1, 5_000)]
+    public int MaxBuyQuantity { get; set; }
 
     public List<Lot> Lots { get; set; } = [];
     public List<Bid> Bids { get; set; } = [];
@@ -57,7 +67,9 @@ public class ItemConfig
         List<string>? extra,
         string categoryPath,
         long minPrice,
-        long maxPrice)
+        long maxPrice,
+        int maxSellQuantity,
+        int maxBuyQuantity)
     {
         return new ItemConfig
         {
@@ -72,7 +84,9 @@ public class ItemConfig
             Extra = extra ?? [],
             CategoryPath = categoryPath,
             MinPrice = minPrice,
-            MaxPrice = maxPrice
+            MaxPrice = maxPrice,
+            MaxSellQuantity = maxSellQuantity,
+            MaxBuyQuantity = maxBuyQuantity
         };
     }
 }

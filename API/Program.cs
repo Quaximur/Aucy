@@ -10,6 +10,15 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
 
+/// Configuration:
+/// 1 <= maxSellQuantity <= 5000
+/// 1 <= maxBuyQuantity <= 5000
+/// 1 <= minPrice <= 10^15 (both lot and bid)
+/// 1 <= maxPrice <= 10^15 (both lot and bid)
+/// NonUnary items pre-created on the server side
+///
+
+
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
 
@@ -121,7 +130,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "food",
             minPrice: 1,
-            maxPrice: 500
+            maxPrice: 500,
+            maxSellQuantity: 100,
+            maxBuyQuantity: 100
         ),
 
         ItemConfig.Create(
@@ -136,7 +147,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "materials/ore",
             minPrice: 1,
-            maxPrice: 500
+            maxPrice: 500,
+            maxSellQuantity: 100,
+            maxBuyQuantity: 100
         ),
 
         ItemConfig.Create(
@@ -151,7 +164,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "materials/ore",
             minPrice: 1,
-            maxPrice: 500
+            maxPrice: 500,
+            maxSellQuantity: 100,
+            maxBuyQuantity: 100
         ),
 
         ItemConfig.Create(
@@ -166,7 +181,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "materials/ore",
             minPrice: 1,
-            maxPrice: 500
+            maxPrice: 500,
+            maxSellQuantity: 100,
+            maxBuyQuantity: 100
         ),
 
         ItemConfig.Create(
@@ -181,7 +198,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "materials/herbs",
             minPrice: 1,
-            maxPrice: 500
+            maxPrice: 500,
+            maxSellQuantity: 100,
+            maxBuyQuantity: 100
         ),
 
         ItemConfig.Create(
@@ -196,7 +215,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "loot/beast",
             minPrice: 1,
-            maxPrice: 500
+            maxPrice: 500,
+            maxSellQuantity: 100,
+            maxBuyQuantity: 100
         ),
 
         ItemConfig.Create(
@@ -211,7 +232,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "materials/magic",
             minPrice: 1,
-            maxPrice: 500
+            maxPrice: 500,
+            maxSellQuantity: 100,
+            maxBuyQuantity: 100
         ),
 
         ItemConfig.Create(
@@ -226,7 +249,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "treasure",
             minPrice: 1,
-            maxPrice: 500
+            maxPrice: 500,
+            maxSellQuantity: 100,
+            maxBuyQuantity: 100
         ),
     };
 

@@ -25,7 +25,9 @@ namespace Aucy.Contracts.OnionClient
             LotDto[] lots,
             BidDto[] bids,
             long minPrice,
-            long maxPrice)
+            long maxPrice,
+            int maxSellQuantity,
+            int maxBuyQuantity)
 
             : base(id: id,
                   name: name,
@@ -38,7 +40,9 @@ namespace Aucy.Contracts.OnionClient
                   extra: extra,
                   categoryPath: categoryPath,
                   minPrice: minPrice,
-                  maxPrice: maxPrice)
+                  maxPrice: maxPrice,
+                  maxSellQuantity: maxSellQuantity,
+                  maxBuyQuantity: maxBuyQuantity)
         {
             Lots = lots;
             Bids = bids;

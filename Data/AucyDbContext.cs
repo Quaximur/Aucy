@@ -97,7 +97,11 @@ public class AucyDbContext : DbContext
         builder.HasCheckConstraint<ItemConfig>("MinPrice", ">= 1");
         builder.HasCheckConstraint<ItemConfig>("MinPrice", "<= [MaxPrice]");
         builder.HasCheckConstraint<ItemConfig>("MaxPrice", ">= 1");
-        builder.HasCheckConstraint<ItemConfig>("MaxPrice", $"<= {1_000_000_000_000_000}");
+        builder.HasCheckConstraint<ItemConfig>("MaxPrice", $"<= {1_000_000_000_000_000}"); 
+        builder.HasCheckConstraint<ItemConfig>("MaxSellQuantity", ">= 1");
+        builder.HasCheckConstraint<ItemConfig>("MaxSellQuantity", "<= 5000");
+        builder.HasCheckConstraint<ItemConfig>("MaxBuyQuantity", ">= 1");
+        builder.HasCheckConstraint<ItemConfig>("MaxBuyQuantity", "<= 5000");
 
         builder.HasCheckConstraint<ItemStack>("Quantity", ">= 1");
 
