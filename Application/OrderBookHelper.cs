@@ -50,6 +50,9 @@ public class OrderBookHelper(
         if (request.UnitPrice < itemConfigDto.MinPrice || request.UnitPrice > itemConfigDto.MaxPrice)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Price should be within range [{itemConfigDto.MinPrice}, {itemConfigDto.MaxPrice}]"));
 
+        if (request.TotalQuantity > itemConfigDto.MaxSellQuantity)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Can`t create a lot with more than {itemConfigDto.MaxSellQuantity} items"));
+
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
             if (!itemConfigDto.IsUnary)
@@ -501,6 +504,9 @@ public class OrderBookHelper(
 
         if (request.BidPrice < itemConfigDto.MinPrice || request.BidPrice > itemConfigDto.MaxPrice)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Price should be within range [{itemConfigDto.MinPrice}, {itemConfigDto.MaxPrice}]"));
+
+        if (request.TotalQuantity > itemConfigDto.MaxBuyQuantity)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Can`t create a bid for more than {itemConfigDto.MaxBuyQuantity} items"));
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
