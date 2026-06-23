@@ -119,7 +119,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             weight: 0.1f,
             baseType: "consumable",
             extra: null,
-            categoryPath: "food"
+            categoryPath: "food",
+            minPrice: 1,
+            maxPrice: 500
         ),
 
         ItemConfig.Create(
@@ -132,7 +134,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             weight: 1.2f,
             baseType: "iron_ore",
             extra: null,
-            categoryPath: "materials/ore"
+            categoryPath: "materials/ore",
+            minPrice: 1,
+            maxPrice: 500
         ),
 
         ItemConfig.Create(
@@ -145,7 +149,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             weight: 1.2f,
             baseType: "iron_ore",
             extra: null,
-            categoryPath: "materials/ore"
+            categoryPath: "materials/ore",
+            minPrice: 1,
+            maxPrice: 500
         ),
 
         ItemConfig.Create(
@@ -158,7 +164,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             weight: 1.2f,
             baseType: "iron_ore",
             extra: null,
-            categoryPath: "materials/ore"
+            categoryPath: "materials/ore",
+            minPrice: 1,
+            maxPrice: 500
         ),
 
         ItemConfig.Create(
@@ -171,7 +179,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             weight: 0.05f,
             baseType: "silverleaf_herb",
             extra: null,
-            categoryPath: "materials/herbs"
+            categoryPath: "materials/herbs",
+            minPrice: 1,
+            maxPrice: 500
         ),
 
         ItemConfig.Create(
@@ -184,7 +194,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             weight: 0.15f,
             baseType: "wolf_fang",
             extra: null,
-            categoryPath: "loot/beast"
+            categoryPath: "loot/beast",
+            minPrice: 1,
+            maxPrice: 500
         ),
 
         ItemConfig.Create(
@@ -197,7 +209,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             weight: 0.1f,
             baseType: "mana_crystal",
             extra: null,
-            categoryPath: "materials/magic"
+            categoryPath: "materials/magic",
+            minPrice: 1,
+            maxPrice: 500
         ),
 
         ItemConfig.Create(
@@ -210,7 +224,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             weight: 0.02f,
             baseType: "ancient_coin",
             extra: null,
-            categoryPath: "treasure"
+            categoryPath: "treasure",
+            minPrice: 1,
+            maxPrice: 500
         ),
     };
 

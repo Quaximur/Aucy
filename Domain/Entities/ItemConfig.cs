@@ -39,21 +39,25 @@ public class ItemConfig
     /// </summary>
     public List<string> Extra { get; set; } = [];
     public required string CategoryPath { get; set; }
+    public long MinPrice { get; set; }
+    public long MaxPrice { get; set; }
 
     public List<Lot> Lots { get; set; } = [];
     public List<Bid> Bids { get; set; } = [];
     public List<ItemStack> ItemStacks { get; set; } = [];
 
-    public static ItemConfig Create(Guid id, 
-        string name, 
-        bool isUnary, 
-        string icon, 
-        int? grade, 
+    public static ItemConfig Create(Guid id,
+        string name,
+        bool isUnary,
+        string icon,
+        int? grade,
         int? rarity,
         float weight,
-        string baseType, 
-        List<string>? extra, 
-        string categoryPath)
+        string baseType,
+        List<string>? extra,
+        string categoryPath,
+        long minPrice,
+        long maxPrice)
     {
         return new ItemConfig
         {
@@ -66,7 +70,9 @@ public class ItemConfig
             Weight = weight,
             BaseType = baseType,
             Extra = extra ?? [],
-            CategoryPath = categoryPath
+            CategoryPath = categoryPath,
+            MinPrice = minPrice,
+            MaxPrice = maxPrice
         };
     }
 }

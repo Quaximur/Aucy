@@ -45,11 +45,15 @@ namespace Aucy.Data.Migrations
                     Weight = table.Column<float>(type: "real", nullable: false),
                     BaseType = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Extra = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CategoryPath = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    CategoryPath = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    MinPrice = table.Column<long>(type: "bigint", nullable: false),
+                    MaxPrice = table.Column<long>(type: "bigint", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ItemConfigs", x => x.Id);
+                    table.CheckConstraint("CK_TEntity_MaxPrice", "\"MaxPrice\" <= 1000000000000000");
+                    table.CheckConstraint("CK_TEntity_MinPrice", "\"MinPrice\" <= [MaxPrice]");
                 });
 
             migrationBuilder.CreateTable(

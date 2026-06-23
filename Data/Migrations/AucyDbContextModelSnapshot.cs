@@ -129,6 +129,12 @@ namespace Aucy.Data.Migrations
                     b.Property<bool>("IsUnary")
                         .HasColumnType("bit");
 
+                    b.Property<long>("MaxPrice")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("MinPrice")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -141,7 +147,12 @@ namespace Aucy.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ItemConfigs");
+                    b.ToTable("ItemConfigs", t =>
+                        {
+                            t.HasCheckConstraint("CK_TEntity_MaxPrice", "\"MaxPrice\" <= 1000000000000000");
+
+                            t.HasCheckConstraint("CK_TEntity_MinPrice", "\"MinPrice\" <= [MaxPrice]");
+                        });
                 });
 
             modelBuilder.Entity("Aucy.Domain.Entities.ItemStack", b =>

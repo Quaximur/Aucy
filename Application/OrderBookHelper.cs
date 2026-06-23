@@ -41,22 +41,25 @@ public class OrderBookHelper(
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
-        var itemConfig = await aucyDb.ItemConfigs
+        var itemConfigDto = await aucyDb.ItemConfigs
             .Where(x => x.Id == request.ItemConfigId)
             .Select(x => _mapper.Map<ItemConfigDto>(x))
             .FirstOrDefaultAsync()
                     ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
+        if (request.UnitPrice < itemConfigDto.MinPrice || request.UnitPrice > itemConfigDto.MaxPrice)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Price should be within range [{itemConfigDto.MinPrice}, {itemConfigDto.MaxPrice}]"));
+
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
-            if (!itemConfig.IsUnary)
+            if (!itemConfigDto.IsUnary)
             {
-                var lotCreatedDto = await SellNonUnary(userId, request, aucyDb, itemConfig);
+                var lotCreatedDto = await SellNonUnary(userId, request, aucyDb, itemConfigDto);
                 return lotCreatedDto;
             }
             else
             {
-                var lotCreatedDto = await SellUnary(userId, request, aucyDb, itemConfig);
+                var lotCreatedDto = await SellUnary(userId, request, aucyDb, itemConfigDto);
                 return lotCreatedDto;
             }
         });
@@ -495,6 +498,9 @@ public class OrderBookHelper(
                 .Select(x => _mapper.Map<ItemConfigDto>(x))
                 .FirstOrDefaultAsync()
                      ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
+
+        if (request.BidPrice < itemConfigDto.MinPrice || request.BidPrice > itemConfigDto.MaxPrice)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Price should be within range [{itemConfigDto.MinPrice}, {itemConfigDto.MaxPrice}]"));
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {

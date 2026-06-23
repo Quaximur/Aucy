@@ -1,6 +1,5 @@
 ﻿using Aucy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using System.Reflection.Emit;
 
 namespace Aucy.Data;
 
@@ -94,6 +93,11 @@ public class AucyDbContext : DbContext
         builder.HasCheckConstraint<Bid>("BidPrice", ">= 1");
         builder.HasCheckConstraint<Bid>("TotalQuantity", ">= 1");
         builder.HasCheckConstraint<Bid>("RemainingQuantity", ">= 0");
+
+        builder.HasCheckConstraint<ItemConfig>("MinPrice", ">= 1");
+        builder.HasCheckConstraint<ItemConfig>("MinPrice", "<= [MaxPrice]");
+        builder.HasCheckConstraint<ItemConfig>("MaxPrice", ">= 1");
+        builder.HasCheckConstraint<ItemConfig>("MaxPrice", $"<= {1_000_000_000_000_000}");
 
         builder.HasCheckConstraint<ItemStack>("Quantity", ">= 1");
 

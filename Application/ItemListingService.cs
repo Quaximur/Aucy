@@ -61,7 +61,7 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
 
                 await stream.WriteAsync(currentListing);
 
-                await Task.Delay(10000, cancellationToken);
+                await Task.Delay(10_000, cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
