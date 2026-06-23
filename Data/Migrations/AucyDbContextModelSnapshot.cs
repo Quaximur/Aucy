@@ -129,8 +129,14 @@ namespace Aucy.Data.Migrations
                     b.Property<bool>("IsUnary")
                         .HasColumnType("bit");
 
+                    b.Property<int>("MaxBuyQuantity")
+                        .HasColumnType("int");
+
                     b.Property<long>("MaxPrice")
                         .HasColumnType("bigint");
+
+                    b.Property<int>("MaxSellQuantity")
+                        .HasColumnType("int");
 
                     b.Property<long>("MinPrice")
                         .HasColumnType("bigint");
@@ -149,7 +155,11 @@ namespace Aucy.Data.Migrations
 
                     b.ToTable("ItemConfigs", t =>
                         {
+                            t.HasCheckConstraint("CK_TEntity_MaxBuyQuantity", "\"MaxBuyQuantity\" <= 5000");
+
                             t.HasCheckConstraint("CK_TEntity_MaxPrice", "\"MaxPrice\" <= 1000000000000000");
+
+                            t.HasCheckConstraint("CK_TEntity_MaxSellQuantity", "\"MaxSellQuantity\" <= 5000");
 
                             t.HasCheckConstraint("CK_TEntity_MinPrice", "\"MinPrice\" <= [MaxPrice]");
                         });

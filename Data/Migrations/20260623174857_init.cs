@@ -47,12 +47,16 @@ namespace Aucy.Data.Migrations
                     Extra = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CategoryPath = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     MinPrice = table.Column<long>(type: "bigint", nullable: false),
-                    MaxPrice = table.Column<long>(type: "bigint", nullable: false)
+                    MaxPrice = table.Column<long>(type: "bigint", nullable: false),
+                    MaxSellQuantity = table.Column<int>(type: "int", nullable: false),
+                    MaxBuyQuantity = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ItemConfigs", x => x.Id);
+                    table.CheckConstraint("CK_TEntity_MaxBuyQuantity", "\"MaxBuyQuantity\" <= 5000");
                     table.CheckConstraint("CK_TEntity_MaxPrice", "\"MaxPrice\" <= 1000000000000000");
+                    table.CheckConstraint("CK_TEntity_MaxSellQuantity", "\"MaxSellQuantity\" <= 5000");
                     table.CheckConstraint("CK_TEntity_MinPrice", "\"MinPrice\" <= [MaxPrice]");
                 });
 
