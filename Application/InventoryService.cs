@@ -41,13 +41,10 @@ public class InventoryService(
         if (request.Quantity <= 0)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Quantity must be greater than zero"));
 
-        if (request.ItemConfig == null)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "ItemConfig must be provided"));
+        if (request.ItemConfig != null && request.ItemConfig.IsUnary && request.Quantity != 1)
+            throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Quantity must be 1 for unary items"));
 
-        if (request.ItemConfig.IsUnary && request.Quantity != 1)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Quantity must be 1 for unary items"));
-
-        var itemConfigId = request.ItemConfig.Id;
+        var itemConfigId = request.ItemConfigId;
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
@@ -69,6 +66,9 @@ public class InventoryService(
 
                 if (itemConfig == null)
                 {
+                    if (request.ItemConfig == null)
+                        throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "ItemConfig must be provided"));
+
                     itemConfig = _mapper.Map<ItemConfig>(request.ItemConfig);
 
                     aucyDb.ItemConfigs.Add(itemConfig);
@@ -78,6 +78,9 @@ public class InventoryService(
                 }
                 else
                 {
+                    if (itemConfig.IsUnary && request.Quantity != 1)
+                        throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Quantity must be 1 for unary items"));
+
                     Console.WriteLine($"ItemConfig found: {itemConfig.Id}, {itemConfig.Name}");
                 }
 

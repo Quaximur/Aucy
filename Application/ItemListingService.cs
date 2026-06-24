@@ -93,19 +93,22 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
         // Scale factor to map prices cleanly into [0 ... QUANTIZATION_SIZE - 1]
         double scale = (double)QUANTIZATION_SIZE / priceRange;
 
-        // 1. Group Lots directly into exact array indices
+        // 1. Group Lots safely with SQL CASE WHEN translation
         var lotBuckets = await _aucyDb.Lots
             .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.IsMatched)
-            // Math.Min handles the absolute edge case where l.UnitPrice == maxPrice
-            .GroupBy(l => Math.Min((int)((l.UnitPrice - minPrice) * scale), QUANTIZATION_SIZE - 1))
+            .GroupBy(l => (int)((l.UnitPrice - minPrice) * scale) >= QUANTIZATION_SIZE
+                ? (int)QUANTIZATION_SIZE - 1
+                : (int)((l.UnitPrice - minPrice) * scale))
             .Select(g => new { BucketIndex = g.Key, Volume = g.Sum(l => l.RemainingQuantity) })
             .OrderBy(x => x.BucketIndex)
             .ToArrayAsync(ct);
 
-        // 2. Group Bids directly into exact array indices
+        // 2. Group Bids safely with SQL CASE WHEN translation
         var bidBuckets = await _aucyDb.Bids
             .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0 && b.IsMatched)
-            .GroupBy(b => Math.Min((int)((b.BidPrice - minPrice) * scale), QUANTIZATION_SIZE - 1))
+            .GroupBy(b => (int)((b.BidPrice - minPrice) * scale) >= QUANTIZATION_SIZE
+                ? (int)QUANTIZATION_SIZE - 1
+                : (int)((b.BidPrice - minPrice) * scale))
             .Select(g => new { BucketIndex = g.Key, Volume = g.Sum(b => b.RemainingQuantity) })
             .OrderBy(x => x.BucketIndex)
             .ToArrayAsync(ct);
