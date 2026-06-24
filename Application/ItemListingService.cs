@@ -108,47 +108,40 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
             .OrderBy(x => x.BucketIndex)
             .ToArrayAsync(ct);
 
-        // Two-pointer merge — O(n)
+        // Merge — O(n)
         var levels = new RawPriceLevelTuple[QUANTIZATION_SIZE];
-        int li = 0, bi = 0, count = 0;
+        int li = 0;
+        int bi = 0;
 
-        while (li < lotBuckets.Length || bi < bidBuckets.Length)
+        for (var i = 0; i < QUANTIZATION_SIZE; i++)
         {
-            long lotKey = li < lotBuckets.Length ? lotBuckets[li].BucketIndex : long.MaxValue;
-            long bidKey = bi < bidBuckets.Length ? bidBuckets[bi].BucketIndex : long.MaxValue;
+            long maxLevelPrice;
 
-            long key;
-            long lotVol = 0, bidVol = 0;
-
-            if (lotKey == bidKey)
-            {
-                key = lotKey;
-                lotVol = lotBuckets[li++].Volume;
-                bidVol = bidBuckets[bi++].Volume;
-            }
-            else if (lotKey < bidKey)
-            {
-                key = lotKey;
-                lotVol = lotBuckets[li++].Volume;
-            }
-            else
-            {
-                key = bidKey;
-                bidVol = bidBuckets[bi++].Volume;
-            }
-
-            var maxLevelPrice = minPrice + key * levelSize + levelSize - 1;
-            if (maxLevelPrice > maxPrice)
+            if (i == QUANTIZATION_SIZE - 1)
                 maxLevelPrice = maxPrice;
+            else 
+                maxLevelPrice = minPrice + i * levelSize + levelSize - 1;
 
-            levels[count++] = new RawPriceLevelTuple(
-                minPrice: minPrice + key * levelSize,
+            var levelTuple = new RawPriceLevelTuple(
+                minPrice: minPrice + i * levelSize,
                 maxPrice: maxLevelPrice,
-                lotQuantity: lotVol,
-                bidQuantity: bidVol);
-        }
+                lotQuantity: 0,
+                bidQuantity: 0);
 
-        // todo check Length = 20
+            if (li < lotBuckets.Length && lotBuckets[li].BucketIndex == i)
+            {
+                levelTuple.LotQuantity = lotBuckets[li].Volume;
+                li++;
+            }
+
+            if (bi < bidBuckets.Length && bidBuckets[bi].BucketIndex == i)
+            {
+                levelTuple.BidQuantity = bidBuckets[bi].Volume;
+                bi++;
+            }
+
+            levels[i] = levelTuple;
+        }
 
         return new RawItemListingDto { Levels = levels };
     }
