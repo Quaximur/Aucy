@@ -32,14 +32,11 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
                 .FirstOrDefaultAsync()
                     ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
-            var levelSize = Math.Max(1, (minMaxPrice.MaxPrice - minMaxPrice.MinPrice) / QUANTIZATION_SIZE);
-
             while (!cancellationToken.IsCancellationRequested)
             {
                 var currentListing = await FetchVolumeListingAsync(itemConfigId,
                     minPrice: minMaxPrice.MinPrice,
                     maxPrice: minMaxPrice.MaxPrice,
-                    levelSize: levelSize,
                     cancellationToken);
 
                 await stream.WriteAsync(currentListing);
@@ -88,43 +85,52 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
     //}
 
     private async Task<RawItemListingDto> FetchVolumeListingAsync(Guid itemConfigId,
-        long minPrice, long maxPrice, long levelSize, CancellationToken ct)
+    long minPrice, long maxPrice, CancellationToken ct)
     {
+        // Prevent Division by Zero if minPrice == maxPrice
+        long priceRange = Math.Max(1, maxPrice - minPrice);
+
+        // Scale factor to map prices cleanly into [0 ... QUANTIZATION_SIZE - 1]
+        double scale = (double)QUANTIZATION_SIZE / priceRange;
+
+        // 1. Group Lots directly into exact array indices
         var lotBuckets = await _aucyDb.Lots
-            .Where(l => l.ItemConfigId == itemConfigId
-                     && l.RemainingQuantity > 0
-                     && l.IsMatched)
-            .GroupBy(l => (l.UnitPrice - minPrice) / levelSize)
+            .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.IsMatched)
+            // Math.Min handles the absolute edge case where l.UnitPrice == maxPrice
+            .GroupBy(l => Math.Min((int)((l.UnitPrice - minPrice) * scale), QUANTIZATION_SIZE - 1))
             .Select(g => new { BucketIndex = g.Key, Volume = g.Sum(l => l.RemainingQuantity) })
             .OrderBy(x => x.BucketIndex)
             .ToArrayAsync(ct);
 
+        // 2. Group Bids directly into exact array indices
         var bidBuckets = await _aucyDb.Bids
-            .Where(b => b.ItemConfigId == itemConfigId
-                     && b.RemainingQuantity > 0
-                     && b.IsMatched)
-            .GroupBy(b => (b.BidPrice - minPrice) / levelSize)
+            .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0 && b.IsMatched)
+            .GroupBy(b => Math.Min((int)((b.BidPrice - minPrice) * scale), QUANTIZATION_SIZE - 1))
             .Select(g => new { BucketIndex = g.Key, Volume = g.Sum(b => b.RemainingQuantity) })
             .OrderBy(x => x.BucketIndex)
             .ToArrayAsync(ct);
 
-        // Merge — O(n)
         var levels = new RawPriceLevelTuple[QUANTIZATION_SIZE];
         int li = 0;
         int bi = 0;
 
-        for (var i = 0; i < QUANTIZATION_SIZE; i++)
+        // 3. Reconstruct intervals perfectly on the application side
+        for (int i = 0; i < QUANTIZATION_SIZE; i++)
         {
-            long maxLevelPrice;
+            // Reverse engineer the min/max price boundaries for this specific bucket
+            long currentMin = minPrice + (long)Math.Ceiling(i / scale);
+
+            // Ensure the last bucket seals perfectly up to maxPrice
+            long currentMax;
 
             if (i == QUANTIZATION_SIZE - 1)
-                maxLevelPrice = maxPrice;
-            else 
-                maxLevelPrice = minPrice + i * levelSize + levelSize - 1;
+                currentMax = maxPrice;
+            else
+                currentMax = minPrice + (long)Math.Ceiling((i + 1) / scale) - 1;
 
             var levelTuple = new RawPriceLevelTuple(
-                minPrice: minPrice + i * levelSize,
-                maxPrice: maxLevelPrice,
+                minPrice: currentMin,
+                maxPrice: currentMax,
                 lotQuantity: 0,
                 bidQuantity: 0);
 
