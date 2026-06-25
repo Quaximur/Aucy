@@ -130,9 +130,9 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "food",
             minPrice: 1,
-            maxPrice: 500,
-            maxSellQuantity: 100,
-            maxBuyQuantity: 100
+            maxPrice: 11,
+            maxSellQuantity: 5000,
+            maxBuyQuantity: 5000
         ),
 
         ItemConfig.Create(
@@ -146,10 +146,10 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             baseType: "iron_ore",
             extra: null,
             categoryPath: "materials/ore",
-            minPrice: 1,
-            maxPrice: 500,
-            maxSellQuantity: 100,
-            maxBuyQuantity: 100
+            minPrice: 10,
+            maxPrice: 40,
+            maxSellQuantity: 5000,
+            maxBuyQuantity: 5000
         ),
 
         ItemConfig.Create(
@@ -163,10 +163,10 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             baseType: "iron_ore",
             extra: null,
             categoryPath: "materials/ore",
-            minPrice: 1,
-            maxPrice: 500,
-            maxSellQuantity: 100,
-            maxBuyQuantity: 100
+            minPrice: 30,
+            maxPrice: 92,
+            maxSellQuantity: 5000,
+            maxBuyQuantity: 5000
         ),
 
         ItemConfig.Create(
@@ -180,10 +180,10 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             baseType: "iron_ore",
             extra: null,
             categoryPath: "materials/ore",
-            minPrice: 1,
-            maxPrice: 500,
-            maxSellQuantity: 100,
-            maxBuyQuantity: 100
+            minPrice: 90,
+            maxPrice: 235,
+            maxSellQuantity: 5000,
+            maxBuyQuantity: 5000
         ),
 
         ItemConfig.Create(
@@ -197,10 +197,10 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             baseType: "silverleaf_herb",
             extra: null,
             categoryPath: "materials/herbs",
-            minPrice: 1,
-            maxPrice: 500,
-            maxSellQuantity: 100,
-            maxBuyQuantity: 100
+            minPrice: 100,
+            maxPrice: 550,
+            maxSellQuantity: 1000,
+            maxBuyQuantity: 1000
         ),
 
         ItemConfig.Create(
@@ -214,10 +214,10 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             baseType: "wolf_fang",
             extra: null,
             categoryPath: "loot/beast",
-            minPrice: 1,
-            maxPrice: 500,
-            maxSellQuantity: 100,
-            maxBuyQuantity: 100
+            minPrice: 60,
+            maxPrice: 188,
+            maxSellQuantity: 5000,
+            maxBuyQuantity: 5000
         ),
 
         ItemConfig.Create(
@@ -231,10 +231,10 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             baseType: "mana_crystal",
             extra: null,
             categoryPath: "materials/magic",
-            minPrice: 1,
-            maxPrice: 500,
-            maxSellQuantity: 100,
-            maxBuyQuantity: 100
+            minPrice: 1000,
+            maxPrice: 3355,
+            maxSellQuantity: 10,
+            maxBuyQuantity: 10
         ),
 
         ItemConfig.Create(
@@ -249,7 +249,7 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             extra: null,
             categoryPath: "treasure",
             minPrice: 1,
-            maxPrice: 500,
+            maxPrice: 555,
             maxSellQuantity: 100,
             maxBuyQuantity: 100
         ),
