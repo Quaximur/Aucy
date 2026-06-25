@@ -7,7 +7,7 @@ namespace Aucy.Contracts.OnionClient
     /// Add ItemStacks (CollectedQuantity).
     /// Add UsedWeight.
     /// Mb add +1 UsedCapacity if ItemStack is not presented in the Inventory.
-    /// Substract CollectedQuantity from Total and Remaining quantity or delete the Bid if it will be 0/0 quantity.
+    /// Substract CollectedQuantity from Total quantity or delete the Bid if it will be 0/0 quantity.
     /// </summary>
     [MessagePackObject]
     public class BidCollectedDto

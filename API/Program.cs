@@ -253,6 +253,23 @@ async Task InitializeItemConfigs(AucyDbContext ctx)
             maxSellQuantity: 100,
             maxBuyQuantity: 100
         ),
+
+        ItemConfig.Create(
+            id: Guid.Parse("00000000-0000-0000-0000-000000000009"),
+            name: "dirt",
+            isUnary: false,
+            icon: "dirt",
+            grade: null,
+            rarity: null,
+            weight: 0.1f,
+            baseType: "dirt",
+            extra: null,
+            categoryPath: "materials/nature",
+            minPrice: 10,
+            maxPrice: 200,
+            maxSellQuantity: 5000,
+            maxBuyQuantity: 5000
+        ),
     };
 
     foreach (var item in defaultItems)

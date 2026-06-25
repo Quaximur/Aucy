@@ -5,7 +5,7 @@ namespace Aucy.Contracts.OnionClient
 {
     /// <summary>
     /// Add ReturningMoney to the Money.
-    /// Substract CollectedQuantity from Total and Remaining quantity or delete the Lot if it will be 0/0 quantity.
+    /// Substract CollectedQuantity from Total quantity or delete the Lot if it will be 0/0 quantity.
     /// </summary>
     [MessagePackObject]
     public class LotCollectedDto
