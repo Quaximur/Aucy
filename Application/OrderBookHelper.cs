@@ -435,8 +435,7 @@ public class OrderBookHelper(
                         .Where(b => b.Id == request.LotId && b.OwnerUserId == userId)
                         .ExecuteUpdateAsync(x =>
                         {
-                            x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - takeQuantity)
-                                .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
+                            x.SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
                         });
                 }
                 else // lot is sold
@@ -862,8 +861,7 @@ public class OrderBookHelper(
                         .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
                         .ExecuteUpdateAsync(x =>
                         {
-                            x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - takeQuantity)
-                                .SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
+                            x.SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
                         });
                 }
                 else
