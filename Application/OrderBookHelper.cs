@@ -554,8 +554,6 @@ public class OrderBookHelper(
                 bidPrice: request.BidPrice,
                 totalQuantity: request.TotalQuantity);
 
-            //await MatchBidWithLots(bid, aucyDb);
-
             aucyDb.Bids.Add(bid);
 
             await aucyDb.SaveChangesAsync();

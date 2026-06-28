@@ -191,20 +191,26 @@ public class InventoryService(
             {
                 aucyDb.Inventories.Add(newInventory); // catch already existing inventory exception
                 await aucyDb.SaveChangesAsync();
+
+                return new InventoryDto
+                (
+                    money: newInventory.Money,
+                    itemStacks: [],
+                    capacity: newInventory.Capacity,
+                    usedCapacity: newInventory.UsedCapacity,
+                    weightLimit: newInventory.WeightLimit,
+                    usedWeight: newInventory.UsedWeight
+                );
             }
             catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx && (sqlEx.Number == 2627 || sqlEx.Number == 2601))
             {
                 throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Inventory already exists"));
             }
-
-            return new InventoryDto()
+            catch (Exception ex)
             {
-                Capacity = newInventory.Capacity,
-                UsedCapacity = newInventory.UsedCapacity,
-                WeightLimit = newInventory.WeightLimit,
-                UsedWeight = newInventory.UsedWeight,
-                ItemStacks = []
-            };
+                throw new RpcException(new Status(StatusCode.Internal,
+                    $"Failed to remove item stack: {ex.Message}"));
+            }
         });
     }
 

@@ -44,20 +44,21 @@ public class OrderHub(WorkerGroupService workerGroupService,
         var inventory = await aucyDb.Inventories
                 .Where(x => x.Id == _userId)
                 .Select(x => new InventoryDto
-                {
-                    Capacity = x.Capacity,
-                    UsedCapacity = x.UsedCapacity,
-                    WeightLimit = x.WeightLimit,
-                    UsedWeight = x.UsedWeight,
-                    ItemStacks = x.ItemStacks
+                (
+                    money: x.Money,
+                    itemStacks: x.ItemStacks
                         .OrderBy(x => x.CreatedAt)
                         .Select(i => new ItemStackDto
-                        {
-                            ItemConfig = _mapper.Map<ItemConfigDto>(i.Config),
-                            Quantity = i.Quantity,
-                        })
-                        .ToArray()
-                })
+                        (
+                            itemConfig: _mapper.Map<ItemConfigDto>(i.Config),
+                            quantity: i.Quantity
+                        ))
+                        .ToArray(),
+                    capacity: x.Capacity,
+                    usedCapacity: x.UsedCapacity,
+                    weightLimit: x.WeightLimit,
+                    usedWeight: x.UsedWeight
+                ))
                 .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
                     "Inventory doesn't exist"));
 
