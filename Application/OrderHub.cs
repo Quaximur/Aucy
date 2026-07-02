@@ -11,11 +11,11 @@ using System.Data;
 namespace Aucy.Application;
 
 // OrderHub for User-Server duplex streaming
-// WorkerHub for Server-Sent Events
+// WorkerGroup for Server-Sent Events
 // Order: Subscribe for Worker Group events -> Store Worker Events -> OrderHub.Connent -> Apply OnJoin ->
 // -> Apply unapplied Worker Events -> continue listening for new Worker Events
 
-// 2 different Hubs: WorkerHub disconnection leads to events loss. Reconnection needs OrderHub.Join.
+// Why not 2 different Hubs: WorkerHub disconnection leads to events loss. Reconnection needs OrderHub.Join.
 
 [Authorize]
 public class OrderHub(WorkerGroupService workerGroupService,
@@ -28,8 +28,10 @@ public class OrderHub(WorkerGroupService workerGroupService,
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
     private readonly IMapper _mapper = mapper;
 
-    //private IGroup<IOrderHubReceiver>? _room;
+    private IGroup<IOrderHubReceiver>? _room;
     private Guid _userId;
+
+    private static string UserConnKey(Guid userId) => $"orders_{userId}";
 
     protected override async ValueTask OnConnected()
     {
@@ -37,7 +39,7 @@ public class OrderHub(WorkerGroupService workerGroupService,
 
         await _workerGroupService.AddMember(_userId, ConnectionId, Client);
 
-        //_room = await Group.AddAsync(_userId.ToString());
+        _room = await Group.AddAsync(UserConnKey(_userId));
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
@@ -78,12 +80,13 @@ public class OrderHub(WorkerGroupService workerGroupService,
 
         var bids = new OwnBidsDto(ownBids);
 
-        Client.OnJoin(lots, bids, inventory);
+        _room?.All.OnJoin(lots, bids, inventory);
     }
 
     protected override async ValueTask OnDisconnected()
     {
-        // _room is Disposed by the Hub
+        if (_room != null)
+            await _room.RemoveAsync(Context);
 
         await _workerGroupService.RemoveMember(_userId, ConnectionId);
     }
@@ -92,41 +95,41 @@ public class OrderHub(WorkerGroupService workerGroupService,
     {
         var bidCreated = await _orderBookHelper.CreateBid(_userId, request);
 
-        Client.OnBidCreated(bidCreated);
+        _room?.All.OnBidCreated(bidCreated);
     }
 
     public async ValueTask CollectBid(CollectBidDto request)
     {
         var bidCollected = await _orderBookHelper.CollectBid(_userId, request);
 
-        Client.OnBidCollected(bidCollected);
+        _room?.All.OnBidCollected(bidCollected);
     }
 
     public async ValueTask RemoveBid(RemoveBidDto request)
     {
         var bidRemoved = await _orderBookHelper.RemoveBid(_userId, request);
 
-        Client.OnBidRemoved(bidRemoved);
+        _room?.All.OnBidRemoved(bidRemoved);
     }
 
     public async ValueTask CreateLot(CreateLotDto request)
     {
         var lotCreated = await _orderBookHelper.CreateLot(_userId, request);
 
-        Client.OnLotCreated(lotCreated);
+        _room?.All.OnLotCreated(lotCreated);
     }
 
     public async ValueTask CollectLot(CollectLotDto request)
     {
         var lotCollected = await _orderBookHelper.CollectLot(_userId, request);
 
-        Client.OnLotCollected(lotCollected);
+        _room?.All.OnLotCollected(lotCollected);
     }
 
     public async ValueTask RemoveLot(RemoveLotDto request)
     {
         var lotRemoved = await _orderBookHelper.RemoveLot(_userId, request);
 
-        Client.OnLotRemoved(lotRemoved);
+        _room?.All.OnLotRemoved(lotRemoved);
     }
 }

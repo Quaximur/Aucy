@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 namespace Aucy.Application;
@@ -18,7 +17,6 @@ public class RedisStartupCleanupService(
             return;
 
         await ClearLocksAsync(cancellationToken);
-        await ClearUserConnectionsAsync(cancellationToken);
     }
 
     private async Task ClearLocksAsync(CancellationToken cancellationToken)
@@ -30,6 +28,8 @@ public class RedisStartupCleanupService(
             "item_unary_*",
             "item_non_unary_user_*",
             "item_unary_user_*",
+            "orders_*",
+            "user-conns_*"
         ];
 
         foreach (var pattern in patterns)
@@ -37,12 +37,6 @@ public class RedisStartupCleanupService(
             var deleted = await DeleteByPatternAsync(pattern);
             logger.LogInformation("Cleared {Count} stale lock keys matching '{Pattern}'", deleted, pattern);
         }
-    }
-
-    private async Task ClearUserConnectionsAsync(CancellationToken cancellationToken)
-    {
-        var deleted = await DeleteByPatternAsync("user-conns:*");
-        logger.LogInformation("Cleared {Count} stale user-connection keys", deleted);
     }
 
     private async Task<int> DeleteByPatternAsync(string pattern)
@@ -58,6 +52,4 @@ public class RedisStartupCleanupService(
 
         return count;
     }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

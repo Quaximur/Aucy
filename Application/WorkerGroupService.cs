@@ -14,7 +14,7 @@ public class WorkerGroupService(
     private readonly IDatabase _redis = redis.GetDatabase();
 
     // Redis key: "user-conns:{userId}" → Set of connectionId strings
-    private static RedisKey UserConnKey(Guid userId) => $"user-conns:{userId}";
+    private static RedisKey UserConnKey(Guid userId) => $"user_conns_{userId}";
 
     public void NotifySold(Guid userId, Guid lotId, int soldQuantity, long extraMoney)
     {
