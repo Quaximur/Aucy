@@ -5,11 +5,11 @@ namespace Aucy.Contracts.OnionClient
 {
     public interface IOrderHub : IStreamingHub<IOrderHub, IOrderHubReceiver>
     {
-        ValueTask CreateLot(CreateLotDto request);
-        ValueTask CollectLot(CollectLotDto request);
-        ValueTask RemoveLot(RemoveLotDto request);
-        ValueTask CreateBid(CreateBidDto request);
-        ValueTask CollectBid(CollectBidDto request);
-        ValueTask RemoveBid(RemoveBidDto request);
+        public ValueTask CreateLot(CreateLotDto request);
+        public ValueTask CollectLot(CollectLotDto request);
+        public ValueTask RemoveLot(RemoveLotDto request);
+        public ValueTask CreateBid(CreateBidDto request);
+        public ValueTask CollectBid(CollectBidDto request);
+        public ValueTask RemoveBid(RemoveBidDto request);
     }
 }
