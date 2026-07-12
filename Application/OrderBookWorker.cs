@@ -1,8 +1,6 @@
 ﻿using Aucy.Application.Helpers;
-using Aucy.Contracts.OnionClient;
 using Aucy.Data;
 using Aucy.Domain.Entities;
-using Cysharp.Runtime.Multicast;
 using Medallion.Threading;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

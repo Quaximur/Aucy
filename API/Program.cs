@@ -59,6 +59,8 @@ services.AddSingleton<InventoryPropertiesHelper>();
 services.AddSingleton<ItemsHelper>();
 services.AddSingleton<WorkerGroupService>();
 
+services.AddGrpc();
+
 services.AddApiAuth();
 
 services.AddAutoMapper(x =>
@@ -105,12 +107,12 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-//app.MapMagicOnionService<OrderBookService>();
 app.MapMagicOnionService<InventoryService>();
-//app.MapMagicOnionService<InventoryLayoutService>();
 app.MapMagicOnionService<ItemSearchService>();
 app.MapMagicOnionService<ItemListingService>();
 app.MapMagicOnionService<OrderHub>();
+
+app.MapGrpcService<WorkerEventPublisherService>(); // TODO: mTLS
 
 app.Run();
 
