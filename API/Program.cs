@@ -112,7 +112,7 @@ app.MapMagicOnionService<ItemSearchService>();
 app.MapMagicOnionService<ItemListingService>();
 app.MapMagicOnionService<OrderHub>();
 
-app.MapGrpcService<WorkerEventPublisherService>(); // TODO: mTLS
+//app.MapGrpcService<WorkerEventPublisherService>(); // TODO: mTLS
 
 app.Run();
 

@@ -30,9 +30,9 @@ public sealed partial class OrderBookWorker(
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
     private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
     private readonly ILogger<OrderBookWorker> _logger = logger;
-    private const int INTERVAL_MS = 1000;
-
     private readonly WorkerGroupService _groupService = groupService;
+
+    private const int INTERVAL_MS = 1000;
 
     public async void RunAsync(Guid itemConfigId)
     {
