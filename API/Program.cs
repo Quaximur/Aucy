@@ -102,8 +102,6 @@ var app = builder.Build();
     await InitializeItemConfigs(ctx);
 }
 
-app.UseHttpsRedirection();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
