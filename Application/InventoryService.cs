@@ -231,14 +231,10 @@ public class InventoryService(
             try
             {
                 var itemStackFields = await aucyDb.ItemStacks
-                    .Where(i => i.Id == request.ItemStackId && i.InventoryId == userId)
+                    .Where(i => i.Id == request.ItemStackId && i.InventoryId == userId && i.Quantity >= request.Quantity)
                     .Select(x => new { x.Id, x.Quantity, ConfigWeight = x.Config.Weight })
                     .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
-                        "ItemStack not found in inventory"));
-
-                if (itemStackFields.Quantity < request.Quantity)
-                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument,
-                        $"Cannot remove {request.Quantity} items, only {itemStackFields.Quantity} available"));
+                        "Not enough items to remove"));
 
                 var itemStackId = itemStackFields.Id;
                 int usedCapacityDiff = 0;
@@ -246,7 +242,7 @@ public class InventoryService(
 
                 if (itemStackFields.Quantity == request.Quantity)
                 {
-                    updatedItemStacks = await aucyDb.ItemStacks.Where(x => x.Id == itemStackFields.Id)
+                    updatedItemStacks = await aucyDb.ItemStacks.Where(x => x.Id == itemStackFields.Id && x.Quantity == request.Quantity)
                         .ExecuteDeleteAsync();
 
                     usedCapacityDiff = -1;
