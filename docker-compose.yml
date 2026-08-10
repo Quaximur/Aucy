@@ -1,25 +1,24 @@
 services:
-    mssql:
-        container_name: mssql
-        image: mcr.microsoft.com/mssql/server:2022-latest
-        environment:
-            ACCEPT_EULA: "Y"
-            MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}"
-            MSSQL_PID: "Developer"
-            MSSQL_DB: "${MSSQL_DB:-aucy_dev_db}"
+    postgres:
+        container_name: aucy_postgres
+        image: postgres:17
+        environment: 
+            POSTGRES_DB: "${POSTGRES_DB:-aucy_dev_db}"
+            POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+            POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-YourStrong!Passw0rd1}"
         volumes:
-            - mssql_data:/var/opt/mssql
+            - postgres_data:/var/lib/postgresql/data
         ports:
-            - "${MSSQL_PORT:-1433}:1433"
+            - "${POSTGRES_PORT:-6768}:5432"
         restart: unless-stopped
         healthcheck:
-            test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd} -C -Q 'SELECT 1' || exit 1"]
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
             interval: 30s
             timeout: 5s
             retries: 5
-            start_period: 10s
+
     redis:
-        container_name: redis
+        container_name: aucy_redis
         image: redis:7.4-alpine
         volumes:
             - redis_data:/data
@@ -30,6 +29,6 @@ services:
         restart: unless-stopped
         
 volumes:
-    mssql_data:
+    postgres_data:
     redis_data:
         driver: local

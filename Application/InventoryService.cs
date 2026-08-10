@@ -223,6 +223,9 @@ public class InventoryService(
             using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
             // Block specified Inventory and ItemStack of a SINGLE User (it`s ok because other users don`t even use it)
+            // Prevent situation with concurrent removing and deleting of the same ItemStack
+            // Ex.: (Quantity=10), Remove 9, Remove 10, Check 10 == 10 (true), Check 9 < 10 (True) ->
+            // Apply transaction (Remove 9, Remove 10, Delete ItemStack with ONLY 1 item left (logic error))
             using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
 
             try
