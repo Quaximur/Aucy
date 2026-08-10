@@ -21,8 +21,8 @@ public class ItemConfig
     /// </summary>
     public bool IsUnary { get; set; }
     public required string Icon { get; set; }
-    public int? Grade { get; set; }
-    public int? Rarity { get; set; }
+    public required int Grade { get; set; }
+    public required int Rarity { get; set; }
 
     [Range(0, float.MaxValue)]
     public float Weight { get; set; }
@@ -60,8 +60,8 @@ public class ItemConfig
         string name,
         bool isUnary,
         string icon,
-        int? grade,
-        int? rarity,
+        int grade,
+        int rarity,
         float weight,
         string baseType,
         List<string>? extra,

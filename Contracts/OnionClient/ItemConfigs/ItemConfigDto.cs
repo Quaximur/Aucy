@@ -11,8 +11,8 @@ namespace Aucy.Contracts.OnionClient
         [Key(1)] public string Name { get; set; }
         [Key(2)] public bool IsUnary { get; set; }
         [Key(3)] public string Icon { get; set; }
-        [Key(4)] public int? Grade { get; set; }
-        [Key(5)] public int? Rarity { get; set; }
+        [Key(4)] public int Grade { get; set; }
+        [Key(5)] public int Rarity { get; set; }
         [Key(6)] public float Weight { get; set; }
         [Key(7)] public string BaseType { get; set; }
         [Key(8)] public List<string> Extra { get; set; }
@@ -28,8 +28,8 @@ namespace Aucy.Contracts.OnionClient
             string name,
             bool isUnary,
             string icon,
-            int? grade,
-            int? rarity,
+            int grade,
+            int rarity,
             float weight,
             string baseType,
             List<string> extra,

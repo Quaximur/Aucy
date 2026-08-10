@@ -119,7 +119,7 @@ namespace Aucy.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("Grade")
+                    b.Property<int>("Grade")
                         .HasColumnType("int");
 
                     b.Property<string>("Icon")
@@ -145,7 +145,7 @@ namespace Aucy.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("Rarity")
+                    b.Property<int>("Rarity")
                         .HasColumnType("int");
 
                     b.Property<float>("Weight")
