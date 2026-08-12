@@ -12,6 +12,7 @@ using MessagePack;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Polly;
 using Polly.Retry;
 using System.Data;
@@ -202,7 +203,8 @@ public class InventoryService(
                     usedWeight: newInventory.UsedWeight
                 );
             }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx && (sqlEx.Number == 2627 || sqlEx.Number == 2601))
+            catch (DbUpdateException ex) 
+                when (ex.InnerException is PostgresException sqlEx && (sqlEx.SqlState == PostgresErrorCodes.UniqueViolation))
             {
                 throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Inventory already exists"));
             }
