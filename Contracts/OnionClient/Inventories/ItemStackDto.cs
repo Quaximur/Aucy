@@ -9,7 +9,7 @@ namespace Aucy.Contracts.OnionClient
         [Key(0)] public Guid ItemConfigId { get; set; }
 
         /// <summary>
-        /// Unary ItemCoonfig. null if NonUnary
+        /// Unary ItemConfig. null if NonUnary
         /// </summary>
         [Key(1)] public ItemConfigDto ItemConfig { get; set; }
         [Key(2)] public int Quantity { get; set; }

@@ -568,7 +568,8 @@ public class OrderBookHelper(
             await transaction.CommitAsync();
 
             return new BidCreatedDto(bidId: bid.Id,
-                itemConfig: itemConfigDto,
+                itemConfigId: itemConfigId,
+                itemConfig: null,  // NonUnary item config is stored on the client
                 bidPrice: bid.BidPrice,
                 totalQuantity: bid.TotalQuantity,
                 createdAt: bid.CreatedAt);
@@ -654,6 +655,7 @@ public class OrderBookHelper(
             await transaction.CommitAsync();
 
             return new BidCreatedDto(bidId: bid.Id,
+                itemConfigId: itemConfigId,
                 itemConfig: itemConfigDto,
                 bidPrice: bid.BidPrice,
                 totalQuantity: bid.TotalQuantity,

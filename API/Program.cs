@@ -68,6 +68,7 @@ services.AddAutoMapper(x =>
     x.AddProfile<ItemConfigMapping>();
     x.AddProfile<LotMapping>();
     x.AddProfile<BidMapping>();
+    x.AddProfile<ItemStackMapping>();
 });
 
 if (builder.Environment.IsDevelopment())
