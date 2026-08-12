@@ -12,14 +12,26 @@ namespace Aucy.Contracts.OnionClient
     public class LotRemovedDto
     {
         [Key(0)] public Guid LotId { get; set; }
-        [Key(1)] public ItemConfigDto ItemConfig { get; set; }
-        [Key(2)] public int RemovedQuantity { get; set; } 
+        [Key(1)] public Guid ItemConfigId { get; set; }
 
-        public LotRemovedDto(Guid lotId, ItemConfigDto itemConfig, int removedQuantity)
+        /// <summary>
+        /// Unary ItemCoonfig. null if NonUnary
+        /// </summary>
+        [Key(2)] public ItemConfigDto ItemConfig { get; set; }
+        [Key(3)] public int RemovedQuantity { get; set; }
+
+        /// <summary>
+        /// Could be either positive or negative. Add it to UsedWeight to apply.
+        /// </summary>
+        [Key(4)] public float WeightDiff { get; set; }
+        
+        public LotRemovedDto(Guid lotId, Guid itemConfigId, ItemConfigDto itemConfig, int removedQuantity, float weightDiff)
         {
             LotId = lotId;
+            ItemConfigId = itemConfigId;
             ItemConfig = itemConfig;
             RemovedQuantity = removedQuantity;
+            WeightDiff = weightDiff;
         }
     }
 }

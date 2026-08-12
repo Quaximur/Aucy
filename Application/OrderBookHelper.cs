@@ -134,9 +134,11 @@ public class OrderBookHelper(
             Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
 
             return new LotCreatedDto(lotId: lot.Id,
-                itemConfig: itemConfigDto,
+                itemConfigId: itemConfigId,
+                itemConfig: null, // NonUnary item config is stored on the client
                 unitPrice: lot.UnitPrice,
                 totalQuantity: lot.TotalQuantity,
+                weightDiff: usedWeightDiff,
                 createdAt: lot.CreatedAt);
         }
         catch (OverflowException)
@@ -211,9 +213,11 @@ public class OrderBookHelper(
             await transaction.CommitAsync();
 
             return new LotCreatedDto(lotId: lot.Id,
+                itemConfigId: itemConfigId,
                 itemConfig: itemConfigDto,
                 unitPrice: lot.UnitPrice,
                 totalQuantity: lot.TotalQuantity,
+                weightDiff: usedWeightDiff,
                 createdAt: lot.CreatedAt);
         }
         catch (OverflowException)
@@ -343,7 +347,11 @@ public class OrderBookHelper(
 
                 await transaction.CommitAsync();
 
-                return new LotRemovedDto(lotId: request.LotId, itemConfig: itemConfigDto, removedQuantity: quantityToRemove);
+                return new LotRemovedDto(lotId: request.LotId,
+                    itemConfigId: lotFields.ItemConfigId,
+                    itemConfig: itemConfigDto.IsUnary ? itemConfigDto : null,  // Send Unary. NonUnary item config is stored on the client 
+                    removedQuantity: quantityToRemove,
+                    weightDiff: usedWeightDiff);
             }
             catch (OverflowException)
             {
@@ -890,8 +898,10 @@ public class OrderBookHelper(
                 await transaction.CommitAsync();
 
                 return new BidCollectedDto(bidId: bidFields.Id,
-                    itemConfig: itemConfigDto,
-                    collectedQuantity: takeQuantity);
+                    itemConfigId: bidFields.ItemConfigId,
+                    itemConfig: itemConfigDto.IsUnary ? itemConfigDto : null,  // Send Unary. NonUnary item config is stored on the client 
+                    collectedQuantity: takeQuantity,
+                    weightDiff: usedWeightDiff);
             }
             catch (OverflowException)
             {
