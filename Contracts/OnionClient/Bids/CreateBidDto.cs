@@ -10,7 +10,7 @@ namespace Aucy.Contracts.OnionClient
         [Key(1)] public long BidPrice { get; set; }
         [Key(2)] public int TotalQuantity { get; set; }
 
-        public CreateBidDto(Guid itemConfigId,long bidPrice, int totalQuantity)
+        public CreateBidDto(Guid itemConfigId, long bidPrice, int totalQuantity)
         {
             ItemConfigId = itemConfigId;
             BidPrice = bidPrice;

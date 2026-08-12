@@ -17,7 +17,6 @@ public class LotMapping : Profile
                 remainingQuantity: src.RemainingQuantity
             ));
 
-        // Use with .Include(l => l.ItemConfig) in EF Core query
         CreateMap<Lot, OwnLotDto>()
             .ConstructUsing(src => new OwnLotDto(
                 id: src.Id,
@@ -30,6 +29,10 @@ public class LotMapping : Profile
                 itemConfig: null,
                 extraSoldoutMoney: src.ExtraSoldoutMoney
             ))
-            .ForMember(dest => dest.ItemConfig, opt => opt.MapFrom(src => src.ItemConfig));
+            .ForMember(dest => dest.ItemConfig, opt =>
+            {
+                opt.Condition(src => src.ItemConfig != null && src.ItemConfig.IsUnary);
+                opt.MapFrom(src => src.ItemConfig);
+            });
     }
 }

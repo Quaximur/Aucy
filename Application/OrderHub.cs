@@ -50,11 +50,7 @@ public class OrderHub(WorkerGroupService workerGroupService,
                     money: x.Money,
                     itemStacks: x.ItemStacks
                         .OrderBy(x => x.CreatedAt)
-                        .Select(i => new ItemStackDto
-                        (
-                            itemConfig: _mapper.Map<ItemConfigDto>(i.Config),
-                            quantity: i.Quantity
-                        ))
+                        .Select(i => _mapper.Map<ItemStackDto>(i))
                         .ToArray(),
                     capacity: x.Capacity,
                     usedCapacity: x.UsedCapacity,

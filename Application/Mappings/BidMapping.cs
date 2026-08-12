@@ -28,6 +28,10 @@ public class BidMapping : Profile
                 createdAt: src.CreatedAt,
                 itemConfig: null
             ))
-            .ForMember(dest => dest.ItemConfig, opt => opt.MapFrom(src => src.ItemConfig));
+            .ForMember(dest => dest.ItemConfig, opt =>
+            {
+                opt.Condition(src => src.ItemConfig != null && src.ItemConfig.IsUnary);
+                opt.MapFrom(src => src.ItemConfig);
+            });
     }
 }

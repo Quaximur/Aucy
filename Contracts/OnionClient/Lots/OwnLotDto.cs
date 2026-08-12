@@ -10,6 +10,10 @@ namespace Aucy.Contracts.OnionClient
 
         [Key(5)] public int TotalQuantity { get; set; }
         [Key(6)] public DateTime CreatedAt { get; set; }
+
+        /// <summary>
+        /// Unary ItemCoonfig. null if NonUnary
+        /// </summary>
         [Key(7)] public ItemConfigDto ItemConfig { get; set; }
         [Key(8)] public long ExtraSoldoutMoney { get; set; }
 
