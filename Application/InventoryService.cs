@@ -209,7 +209,7 @@ public class InventoryService(
             catch (Exception ex)
             {
                 throw new RpcException(new Status(StatusCode.Internal,
-                    $"Failed to remove item stack: {ex.Message}"));
+                    $"Failed to create Inventory: {ex.Message}"));
             }
         });
     }
