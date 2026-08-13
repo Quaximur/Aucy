@@ -15,6 +15,19 @@ public class WorkerGroupService(
 
     // Redis key: "user-conns:{userId}" → Set of connectionId strings
     private static RedisKey UserConnKey(Guid userId) => $"user_conns_{userId}";
+    private static readonly LuaScript RemoveMemberScript = LuaScript.Prepare(@"
+        local key = @key
+        local member = @member
+    
+        redis.call('SREM', key, member)
+        local remaining = redis.call('SCARD', key)
+    
+        if remaining == 0 then
+            redis.call('DEL', key)
+            return 1
+        end
+        return 0
+    ");
 
     public void NotifySold(Guid userId, Guid lotId, int soldQuantity, long extraMoney)
     {
@@ -52,12 +65,11 @@ public class WorkerGroupService(
     public async ValueTask RemoveMember(Guid userId, Guid connectionId)
     {
         await _group.RemoveAsync(connectionId);
-        await _redis.SetRemoveAsync(UserConnKey(userId), connectionId.ToString());
-
-        // Clean up the key if the set is now empty
-        var remaining = await _redis.SetLengthAsync(UserConnKey(userId));
-        if (remaining == 0)
-            await _redis.KeyDeleteAsync(UserConnKey(userId));
+        await _redis.ScriptEvaluateAsync(RemoveMemberScript, new
+        {
+            key = UserConnKey(userId),
+            member = (RedisValue)connectionId.ToString()
+        });
     }
 
     private async Task<IEnumerable<Guid>?> GetConnectionIdsAsync(Guid userId)
