@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-Aucy.Workers-a977c18e-1cf1-4932-8818-833b33b99e1a</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+	<PackageReference Include="DotNetEnv" Version="3.2.0" />
+	<PackageReference Include="MagicOnion.Server.Redis" Version="7.10.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+	<ProjectReference Include="..\Application\Aucy.Application.csproj" />
+    <ProjectReference Include="..\Data\Aucy.Data.csproj" />
+    <ProjectReference Include="..\Domain\Aucy.Domain.csproj" />
+  </ItemGroup>
+</Project>

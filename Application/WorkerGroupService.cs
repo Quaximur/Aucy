@@ -29,30 +29,6 @@ public class WorkerGroupService(
         return 0
     ");
 
-    public void NotifySold(Guid userId, Guid lotId, int soldQuantity, long extraMoney)
-    {
-        Task.Run(async () =>
-        {
-            var connIds = await GetConnectionIdsAsync(userId);
-
-            // _group.Only(...) fans out across ALL nodes that hold those connectionIds
-            // We just need to resolve which connectionIds belong to this user
-            if (connIds != null)
-                _group.Only(connIds).OnSold(lotId, soldQuantity, extraMoney);
-        });
-    }
-
-    public void NotifyBought(Guid userId, Guid bidId, int boughtQuantity, long extraMoney)
-    {
-        Task.Run(async () =>
-        {
-            var connIds = await GetConnectionIdsAsync(userId);
-
-            if (connIds != null)
-                _group.Only(connIds).OnBought(bidId, boughtQuantity, extraMoney);
-        });
-    }
-
     public async ValueTask AddMember(Guid userId, Guid connectionId, IWorkerHubReceiver receiver)
     {
         // Register the receiver in the distributed group
@@ -70,18 +46,6 @@ public class WorkerGroupService(
             key = UserConnKey(userId),
             member = (RedisValue)connectionId.ToString()
         });
-    }
-
-    private async Task<IEnumerable<Guid>?> GetConnectionIdsAsync(Guid userId)
-    {
-        var members = await _redis.SetMembersAsync(UserConnKey(userId));
-        if (members == null || members.Length == 0)
-            return null;
-
-        return members
-            .Select(m => Guid.TryParse((ReadOnlySpan<byte>)m, out var g) ? g : (Guid?)null)
-            .Where(g => g.HasValue)
-            .Select(g => g!.Value);
     }
 
     public void Dispose()

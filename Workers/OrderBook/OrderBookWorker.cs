@@ -1,36 +1,35 @@
-﻿using Aucy.Application.Helpers;
+﻿using Aucy.Application;
+using Aucy.Application.Helpers;
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using Medallion.Threading;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using System.Data;
 
-namespace Aucy.Application;
-
-public struct WorkerPostEvent()
-{
-    public bool IsLot;
-    public Guid UserId;
-    public Guid OrderId;
-    public int Quantity;
-    public long ExtraMoney;
-}
+namespace Aucy.Workers.OrderBook;
 
 public sealed partial class OrderBookWorker(
     IDbContextFactory<AucyDbContext> aucyDbFactory,
     IServiceScopeFactory scopeFactory,
     IDistributedReaderWriterLockProvider rwLockProvider,
     ILogger<OrderBookWorker> logger,
-    WorkerGroupService groupService
+    WorkerGroupNotifier groupNotifier
     )
 {
+    private struct WorkerPostEvent()
+    {
+        public bool IsLot;
+        public Guid UserId;
+        public Guid OrderId;
+        public int Quantity;
+        public long ExtraMoney;
+    }
+
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
     private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
     private readonly ILogger<OrderBookWorker> _logger = logger;
-    private readonly WorkerGroupService _groupService = groupService;
+    private readonly WorkerGroupNotifier _groupNotifier = groupNotifier;
 
     private const int INTERVAL_MS = 1000;
 
@@ -115,19 +114,21 @@ public sealed partial class OrderBookWorker(
                 {
                     if (workerEvent.IsLot)
                     {
-                        _groupService.NotifySold(userId: workerEvent.UserId,
+                        _groupNotifier.NotifySold(userId: workerEvent.UserId,
                             lotId: workerEvent.OrderId,
                             soldQuantity: workerEvent.Quantity,
                             extraMoney: workerEvent.ExtraMoney);
                     }
                     else
                     {
-                        _groupService.NotifyBought(userId: workerEvent.UserId,
+                        _groupNotifier.NotifyBought(userId: workerEvent.UserId,
                             bidId: workerEvent.OrderId,
                             boughtQuantity: workerEvent.Quantity,
                             extraMoney: workerEvent.ExtraMoney);
                     }
                 }
+
+                // TODO: wait for all events to complete before releasing rw lock
             }
             catch
             {

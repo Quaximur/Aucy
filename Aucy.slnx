@@ -9,4 +9,5 @@
   <Project Path="Contracts/Aucy.Contracts.csproj" Id="9459b4ae-165b-4377-8bac-5ee5e76281ff" />
   <Project Path="Data/Aucy.Data.csproj" Id="d91c1034-69f6-4b68-8f64-b0889e97c0aa" />
   <Project Path="Domain/Aucy.Domain.csproj" Id="8ead6c59-6121-4acc-bf55-9ccc85f14a27" />
+  <Project Path="Workers/Aucy.Workers.csproj" />
 </Solution>
