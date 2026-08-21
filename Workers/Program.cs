@@ -2,7 +2,6 @@ using Aucy.Application.Helpers;
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using Aucy.Workers.OrderBook;
-using MagicOnion;
 using Microsoft.EntityFrameworkCore;
 
 var builder = Host.CreateApplicationBuilder(args);
