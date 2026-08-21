@@ -128,7 +128,12 @@ public sealed partial class OrderBookWorker(
                     }
                 }
 
-                // TODO: wait for all events to complete before releasing rw lock
+                // THINK: wait for all events to complete before releasing rw lock?
+                // Mb it is not necessary, because the State on the server-side will be OK anyway.
+                // The problem can apear only if another request with the same Lot/Bid will be processed faster
+                // than notification gets to the client.
+                // (user create lot x15 -> Matching Item x15 -> worker sends notification x15 sold -> user remove lot x15 ->
+                // user gets error (nothing to remove) -> user gets notification x15 sold)
             }
             catch
             {
