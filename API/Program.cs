@@ -1,6 +1,5 @@
 using Aucy.API.Extensions;
 using Aucy.Application;
-using Aucy.Application.Auth;
 using Aucy.Application.Helpers;
 using Aucy.Application.Mappings;
 using Aucy.Contracts.OnionClient;
@@ -86,15 +85,7 @@ var app = builder.Build();
 
     if (app.Environment.IsDevelopment())
     {
-        //app.UseSwagger();
-        //app.UseSwaggerUI();
-
         ctx.Database.Migrate();
-
-        app.MapGroup("/dev").MapGet("/token/{userId}", (IJwtProvider jwtProvider, Guid userId) =>
-        {
-            return jwtProvider.GenerateToken(userId);
-        });
     }
 }
 
@@ -106,6 +97,6 @@ app.MapMagicOnionService<ItemSearchService>();
 app.MapMagicOnionService<ItemListingService>();
 app.MapMagicOnionService<OrderHub>();
 
-//app.MapGrpcService<WorkerEventPublisherService>(); // TODO: mTLS
+//app.MapGrpcService<WorkerEventPublisherService>();
 
 app.Run();
