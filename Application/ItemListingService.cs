@@ -76,14 +76,12 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
 
         // initialize representative prices
         for (var i = 0; i < priceTierCount; i++)
-        {
-            levels[i] = new RawPriceLevelTuple(price: quantizer.GetRepresentativePriceForIndex(minPrice, maxPrice, priceTierCount, i), lotQuantity: 0, bidQuantity: 0);
-        }
+            levels[i] = new RawPriceLevelTuple(price: quantizer.GetPriceForTier(minPrice, maxPrice, priceTierCount, i), lotQuantity: 0, bidQuantity: 0);
 
         // populate lot volumes
         foreach (var lb in lotBuckets)
         {
-            var idx = quantizer.GetIndexForPrice(minPrice, maxPrice, priceTierCount, lb.Price);
+            var idx = quantizer.GetTierIndex(minPrice, maxPrice, priceTierCount, lb.Price);
             if (idx >= 0 && idx < levels.Length)
                 levels[idx].LotQuantity += lb.Volume;
             // ignore out-of-range prices
@@ -92,7 +90,7 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
         // populate bid volumes
         foreach (var bb in bidBuckets)
         {
-            var idx = quantizer.GetIndexForPrice(minPrice, maxPrice, priceTierCount, bb.Price);
+            var idx = quantizer.GetTierIndex(minPrice, maxPrice, priceTierCount, bb.Price);
             if (idx >= 0 && idx < levels.Length)
                 levels[idx].BidQuantity += bb.Volume;
             // ignore out-of-range prices
