@@ -5,16 +5,14 @@ namespace Aucy.Contracts.OnionClient
     [MessagePackObject]
     public struct RawPriceLevelTuple
     {
-        [Key(0)] public long MinPrice { get; set; }
-        [Key(1)] public long MaxPrice { get; set; }
-        [Key(2)] public long LotQuantity { get; set; }
-        [Key(3)] public long BidQuantity { get; set; }
+        // Representative price for the tier (one price per level)
+        [Key(0)] public long Price { get; set; }
+        [Key(1)] public long LotQuantity { get; set; }
+        [Key(2)] public long BidQuantity { get; set; }
 
-        public RawPriceLevelTuple(long minPrice, long maxPrice,
-            long lotQuantity, long bidQuantity)
+        public RawPriceLevelTuple(long price, long lotQuantity, long bidQuantity)
         {
-            MinPrice = minPrice;
-            MaxPrice = maxPrice;
+            Price = price;
             LotQuantity = lotQuantity;
             BidQuantity = bidQuantity;
         }

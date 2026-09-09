@@ -15,7 +15,6 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
 #pragma warning disable CS8644
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
-    private const int MAX_QUANTIZATION_SIZE = 20;
     private const int NOTIFY_COOLDOWN_MS = 10_000;
 
     public async Task<ServerStreamingResult<RawItemListingDto>> GetItemListingStream(Guid itemConfigId)
@@ -27,33 +26,22 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
         {
             // TODO: raw SQL or Redis with pre-calc in BackgroundWorker
 
-            var minMaxPrice = await _aucyDb.ItemConfigs
+            var cfg = await _aucyDb.ItemConfigs
                 .Where(x => x.Id == itemConfigId)
-                .Select(x => new { x.MinPrice, x.MaxPrice })
+                .Select(x => new { x.MinPrice, x.MaxPrice, x.PriceTierCount })
                 .FirstOrDefaultAsync()
                     ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
-            long priceRange = minMaxPrice.MaxPrice - minMaxPrice.MinPrice;
-
-            int quantizationSize;
-            double ratio; // Scale factor to map prices cleanly into [0 ... QUANTIZATION_SIZE - 1]
-            
-            if (priceRange < MAX_QUANTIZATION_SIZE)
-            {
-                quantizationSize = (int)priceRange + 1;
-                ratio = 1;
-            }
-            else
-            {
-                quantizationSize = MAX_QUANTIZATION_SIZE;
-                ratio = (double)quantizationSize / priceRange;
-            }
+            long priceRange = cfg.MaxPrice - cfg.MinPrice;
+            int quantizationSize = cfg.PriceTierCount;
+            int cappedDesired = cfg.PriceTierCount;
+            double ratio = (double)quantizationSize / priceRange; // Scale factor to map prices cleanly into [0 ... QUANTIZATION_SIZE - 1]
 
             while (!cancellationToken.IsCancellationRequested)
             {
                 var currentListing = await FetchVolumeListingAsync(itemConfigId,
-                    minPrice: minMaxPrice.MinPrice,
-                    maxPrice: minMaxPrice.MaxPrice,
+                    minPrice: cfg.MinPrice,
+                    maxPrice: cfg.MaxPrice,
                     ratio: ratio,
                     quantizationSize: quantizationSize,
                     cancellationToken);
@@ -116,9 +104,9 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
             else
                 currentMax = minPrice + (long)Math.Ceiling((i + 1) / ratio) - 1;
 
+            // Use the currentMin as the representative price for the tier
             var levelTuple = new RawPriceLevelTuple(
-                minPrice: currentMin,
-                maxPrice: currentMax,
+                price: currentMin,
                 lotQuantity: 0,
                 bidQuantity: 0);
 

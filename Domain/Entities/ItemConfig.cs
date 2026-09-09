@@ -52,6 +52,9 @@ public class ItemConfig
     [Range(1, 5_000)]
     public int MaxBuyQuantity { get; set; }
 
+    [Range(1, 5_000)]
+    public int PriceTierCount { get; set; }
+
     public List<Lot> Lots { get; set; } = [];
     public List<Bid> Bids { get; set; } = [];
     public List<ItemStack> ItemStacks { get; set; } = [];
@@ -69,7 +72,8 @@ public class ItemConfig
         long minPrice,
         long maxPrice,
         int maxSellQuantity,
-        int maxBuyQuantity)
+        int maxBuyQuantity,
+        int priceTierCount)
     {
         return new ItemConfig
         {
@@ -86,7 +90,8 @@ public class ItemConfig
             MinPrice = minPrice,
             MaxPrice = maxPrice,
             MaxSellQuantity = maxSellQuantity,
-            MaxBuyQuantity = maxBuyQuantity
+            MaxBuyQuantity = maxBuyQuantity,
+            PriceTierCount = priceTierCount
         };
     }
 }
