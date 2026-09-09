@@ -12,8 +12,6 @@ namespace Aucy.Application.Helpers
 
     public class PriceTierQuantizer : IPriceTierQuantizer
     {
-        private const double Tolerance = 1e-9;
-
         public long GetPriceStep(long minPrice, long maxPrice, int priceTierCount)
         {
             ValidateParams(minPrice, maxPrice, priceTierCount);

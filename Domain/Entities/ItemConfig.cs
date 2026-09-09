@@ -47,13 +47,13 @@ public class ItemConfig
     public long MaxPrice { get; set; }
 
     [Range(1, 5_000)]
+    public int PriceTierCount { get; set; }
+
+    [Range(1, 5_000)]
     public int MaxSellQuantity { get; set; }
 
     [Range(1, 5_000)]
     public int MaxBuyQuantity { get; set; }
-
-    [Range(1, 5_000)]
-    public int PriceTierCount { get; set; }
 
     public List<Lot> Lots { get; set; } = [];
     public List<Bid> Bids { get; set; } = [];
@@ -71,9 +71,9 @@ public class ItemConfig
         string categoryPath,
         long minPrice,
         long maxPrice,
+        int priceTierCount,
         int maxSellQuantity,
-        int maxBuyQuantity,
-        int priceTierCount)
+        int maxBuyQuantity)
     {
         return new ItemConfig
         {
@@ -89,9 +89,9 @@ public class ItemConfig
             CategoryPath = categoryPath,
             MinPrice = minPrice,
             MaxPrice = maxPrice,
+            PriceTierCount = priceTierCount,
             MaxSellQuantity = maxSellQuantity,
-            MaxBuyQuantity = maxBuyQuantity,
-            PriceTierCount = priceTierCount
+            MaxBuyQuantity = maxBuyQuantity
         };
     }
 }

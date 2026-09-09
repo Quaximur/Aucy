@@ -53,7 +53,7 @@ public class OrderBookHelper(
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Price should be within range [{itemConfigDto.MinPrice}, {itemConfigDto.MaxPrice}]"));
 
         // Validate that provided price matches one of configured price tiers
-        if (!_quantizer.ValidatePriceBelongsToTier(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, itemConfigDto.PriceTierCount, request.UnitPrice))
+        if (!_quantizer.IsPriceValid(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, itemConfigDto.PriceTierCount, request.UnitPrice))
             throw new RpcException(new Status(StatusCode.InvalidArgument,
                 $"Price should belong to one of configured tiers. Provided price {request.UnitPrice} is not a valid tier representative."));
 

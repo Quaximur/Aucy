@@ -19,9 +19,9 @@ namespace Aucy.Contracts.OnionClient
         [Key(9)] public string CategoryPath { get; set; }
         [Key(10)] public long MinPrice { get; set; }
         [Key(11)] public long MaxPrice { get; set; }
-        [Key(12)] public int MaxSellQuantity { get; set; }
-        [Key(13)] public int MaxBuyQuantity { get; set; }
-        [Key(14)] public int PriceTierCount { get; set; }
+        [Key(12)] public int PriceTierCount { get; set; }
+        [Key(13)] public int MaxSellQuantity { get; set; }
+        [Key(14)] public int MaxBuyQuantity { get; set; }
 
         public ItemConfigDto() { }
 
@@ -37,9 +37,9 @@ namespace Aucy.Contracts.OnionClient
             string categoryPath,
             long minPrice,
             long maxPrice,
+            int priceTierCount,
             int maxSellQuantity,
-            int maxBuyQuantity,
-            int priceTierCount)
+            int maxBuyQuantity)
         {
             Id = id;
             Name = name;
@@ -53,9 +53,9 @@ namespace Aucy.Contracts.OnionClient
             CategoryPath = categoryPath;
             MinPrice = minPrice;
             MaxPrice = maxPrice;
+            PriceTierCount = priceTierCount;
             MaxSellQuantity = maxSellQuantity;
             MaxBuyQuantity = maxBuyQuantity;
-            PriceTierCount = priceTierCount;
         }
     }
 }

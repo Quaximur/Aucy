@@ -22,9 +22,9 @@ namespace Aucy.Application.Mappings
                     categoryPath: src.CategoryPath,
                     minPrice: src.MinPrice,
                     maxPrice: src.MaxPrice,
+                    priceTierCount: src.PriceTierCount,
                     maxSellQuantity: src.MaxSellQuantity,
-                    maxBuyQuantity: src.MaxBuyQuantity,
-                    priceTierCount: src.PriceTierCount
+                    maxBuyQuantity: src.MaxBuyQuantity
                 ));
 
             CreateMap<ItemConfig, ItemConfigDto>()
@@ -41,9 +41,9 @@ namespace Aucy.Application.Mappings
                     categoryPath: src.CategoryPath,
                     minPrice: src.MinPrice,
                     maxPrice: src.MaxPrice,
+                    priceTierCount: src.PriceTierCount,
                     maxSellQuantity: src.MaxSellQuantity,
-                    maxBuyQuantity: src.MaxBuyQuantity,
-                    priceTierCount: src.PriceTierCount
+                    maxBuyQuantity: src.MaxBuyQuantity
                 ));
         }
     }
