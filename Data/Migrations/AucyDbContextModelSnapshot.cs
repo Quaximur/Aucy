@@ -146,6 +146,9 @@ namespace Aucy.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("PriceTierCount")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Rarity")
                         .HasColumnType("integer");
 
