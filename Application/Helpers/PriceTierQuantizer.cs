@@ -2,87 +2,198 @@ namespace Aucy.Application.Helpers
 {
     public interface IPriceTierQuantizer
     {
-        public long GetPriceStep(long minPrice, long maxPrice, int priceTierCount);
-        public int GetTierIndex(long minPrice, long maxPrice, int priceTierCount, long price);
-        public long GetPriceForTier(long minPrice, long maxPrice, int priceTierCount, int tierIndex);
-        public long[] GetAllTierPrices(long minPrice, long maxPrice, int priceTierCount);
-        public bool IsPriceValid(long minPrice, long maxPrice, int priceTierCount, long price);
-        public long RoundToNearestTier(long minPrice, long maxPrice, int priceTierCount, long price);
+        bool TryGetPriceStep(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            out long priceStep);
+
+        bool TryGetTierIndex(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            long price,
+            out int tierIndex);
+
+        bool TryGetPriceForTier(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            int tierIndex,
+            out long tierPrice);
+
+        bool TryGetAllTierPrices(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            out long[] tierPrices);
+
+        bool IsPriceValid(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            long price);
+
+        bool TryRoundToNearestTier(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            long price,
+            out long roundedPrice);
     }
 
     public class PriceTierQuantizer : IPriceTierQuantizer
     {
-        public long GetPriceStep(long minPrice, long maxPrice, int priceTierCount)
+        public bool TryGetPriceStep(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            out long priceStep)
         {
-            ValidateParams(minPrice, maxPrice, priceTierCount);
+            priceStep = default;
+
+            if (!ValidateParams(minPrice, maxPrice, priceTierCount))
+                return false;
 
             if (priceTierCount == 1 || minPrice == maxPrice)
-                return 0;
+            {
+                priceStep = 0;
+                return true;
+            }
 
             var range = (decimal)maxPrice - minPrice;
             var steps = priceTierCount - 1;
             var step = range / steps;
 
-            return (long)Math.Round(step, MidpointRounding.AwayFromZero);
+            priceStep = (long)Math.Round(step, MidpointRounding.AwayFromZero);
+
+            return true;
         }
 
-        public int GetTierIndex(long minPrice, long maxPrice, int priceTierCount, long price)
+        public bool TryGetTierIndex(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            long price,
+            out int tierIndex)
         {
-            ValidateParams(minPrice, maxPrice, priceTierCount);
+            tierIndex = default;
 
-            if (price < minPrice || price > maxPrice)
-                return -1;
+            if (!ValidateParams(minPrice, maxPrice, priceTierCount))
+                return false;
 
-            if (priceTierCount == 1)
-                return 0;
-
-            var step = GetPriceStep(minPrice, maxPrice, priceTierCount);
-
-            if (step == 0)
-                return 0;
-
-            var index = (double)(price - minPrice) / step;
-            var roundedIndex = (int)Math.Round(index, MidpointRounding.AwayFromZero);
-
-            return Math.Clamp(roundedIndex, 0, priceTierCount - 1);
-        }
-
-        public long GetPriceForTier(long minPrice, long maxPrice, int priceTierCount, int tierIndex)
-        {
-            ValidateParams(minPrice, maxPrice, priceTierCount);
-
-            if (tierIndex < 0 || tierIndex >= priceTierCount)
-                throw new ArgumentOutOfRangeException(nameof(tierIndex),
-                    $"Tier index must be between 0 and {priceTierCount - 1}");
-
-            if (priceTierCount == 1 || minPrice == maxPrice)
-                return minPrice;
-
-            var price = minPrice + (tierIndex * (maxPrice - minPrice) / (priceTierCount - 1));
-
-            return price;
-        }
-
-        public long[] GetAllTierPrices(long minPrice, long maxPrice, int priceTierCount)
-        {
-            ValidateParams(minPrice, maxPrice, priceTierCount);
-
-            var prices = new long[priceTierCount];
-            for (var i = 0; i < priceTierCount; i++)
-                prices[i] = GetPriceForTier(minPrice, maxPrice, priceTierCount, i);
-            
-            return prices;
-        }
-
-        public bool IsPriceValid(long minPrice, long maxPrice, int priceTierCount, long price)
-        {
             if (price < minPrice || price > maxPrice)
                 return false;
 
             if (priceTierCount == 1)
-                return price == minPrice;
+            {
+                tierIndex = 0;
+                return true;
+            }
 
-            var step = GetPriceStep(minPrice, maxPrice, priceTierCount);
+            if (!TryGetPriceStep(
+                    minPrice,
+                    maxPrice,
+                    priceTierCount,
+                    out var step))
+            {
+                return false;
+            }
+
+            if (step == 0)
+            {
+                tierIndex = 0;
+                return true;
+            }
+
+            var index = (double)(price - minPrice) / step;
+            var roundedIndex = (int)Math.Round(index, MidpointRounding.AwayFromZero);
+
+            tierIndex = Math.Clamp(roundedIndex, 0, priceTierCount - 1);
+
+            return true;
+        }
+
+        public bool TryGetPriceForTier(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            int tierIndex,
+            out long tierPrice)
+        {
+            tierPrice = default;
+
+            if (!ValidateParams(minPrice, maxPrice, priceTierCount))
+                return false;
+
+            if (tierIndex < 0 || tierIndex >= priceTierCount)
+                return false;
+
+            if (priceTierCount == 1 || minPrice == maxPrice)
+            {
+                tierPrice = minPrice;
+                return true;
+            }
+
+            tierPrice = minPrice + (tierIndex * (maxPrice - minPrice) / (priceTierCount - 1));
+
+            return true;
+        }
+
+        public bool TryGetAllTierPrices(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            out long[] tierPrices)
+        {
+            tierPrices = default!;
+
+            if (!ValidateParams(minPrice, maxPrice, priceTierCount))
+                return false;
+
+            var prices = new long[priceTierCount];
+
+            for (var i = 0; i < priceTierCount; i++)
+            {
+                if (!TryGetPriceForTier(
+                        minPrice,
+                        maxPrice,
+                        priceTierCount,
+                        i,
+                        out prices[i]))
+                {
+                    tierPrices = default!;
+                    return false;
+                }
+            }
+
+            tierPrices = prices;
+            return true;
+        }
+
+        public bool IsPriceValid(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            long price)
+        {
+            if (!ValidateParams(minPrice, maxPrice, priceTierCount))
+                return false;
+
+            if (price < minPrice || price > maxPrice)
+                return false;
+
+            if (priceTierCount == 1)
+                return price == minPrice && minPrice == maxPrice;
+
+            if (!TryGetPriceStep(
+                    minPrice,
+                    maxPrice,
+                    priceTierCount,
+                    out var step))
+            {
+                return false;
+            }
 
             if (step == 0)
                 return price == minPrice;
@@ -93,43 +204,86 @@ namespace Aucy.Application.Helpers
             return remainder == 0;
         }
 
-        public long RoundToNearestTier(long minPrice, long maxPrice, int priceTierCount, long price)
+        public bool TryRoundToNearestTier(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount,
+            long price,
+            out long roundedPrice)
         {
-            ValidateParams(minPrice, maxPrice, priceTierCount);
+            roundedPrice = default;
+
+            if (!ValidateParams(minPrice, maxPrice, priceTierCount))
+                return false;
 
             if (price < minPrice)
-                return minPrice;
+            {
+                roundedPrice = minPrice;
+                return true;
+            }
 
             if (price > maxPrice)
-                return maxPrice;
+            {
+                roundedPrice = maxPrice;
+                return true;
+            }
 
             if (priceTierCount == 1)
-                return minPrice;
+            {
+                roundedPrice = minPrice;
+                return true;
+            }
 
-            var step = GetPriceStep(minPrice, maxPrice, priceTierCount);
+            if (!TryGetPriceStep(
+                    minPrice,
+                    maxPrice,
+                    priceTierCount,
+                    out var step))
+            {
+                return false;
+            }
 
             if (step == 0)
-                return minPrice;
+            {
+                roundedPrice = minPrice;
+                return true;
+            }
 
             var diff = price - minPrice;
             var tiers = (double)diff / step;
-            var roundedTiers = (int)Math.Round(tiers, MidpointRounding.AwayFromZero);
 
-            roundedTiers = Math.Clamp(roundedTiers, 0, priceTierCount - 1);
+            var roundedTiers = (int)Math.Round(
+                tiers,
+                MidpointRounding.AwayFromZero);
 
-            return GetPriceForTier(minPrice, maxPrice, priceTierCount, roundedTiers);
+            roundedTiers = Math.Clamp(
+                roundedTiers,
+                0,
+                priceTierCount - 1);
+
+            return TryGetPriceForTier(
+                minPrice,
+                maxPrice,
+                priceTierCount,
+                roundedTiers,
+                out roundedPrice);
         }
 
-        private void ValidateParams(long minPrice, long maxPrice, int priceTierCount)
+        private bool ValidateParams(
+            long minPrice,
+            long maxPrice,
+            int priceTierCount)
         {
-            if (minPrice < 0)
-                throw new ArgumentException("Min price cannot be negative", nameof(minPrice));
+            if (minPrice <= 0)
+                return false;
 
             if (maxPrice < minPrice)
-                throw new ArgumentException("Max price must be greater than or equal to min price", nameof(maxPrice));
+                return false;
 
             if (priceTierCount <= 0)
-                throw new ArgumentException("Price tier count must be greater than 0", nameof(priceTierCount));
+                return false;
+
+            return true;
         }
     }
 }

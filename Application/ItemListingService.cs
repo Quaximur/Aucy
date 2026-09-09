@@ -55,47 +55,82 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
         return stream.Result();
     }
 
-    private async Task<RawItemListingDto> FetchVolumeListingAsync(Guid itemConfigId,
-        IPriceTierQuantizer quantizer, long minPrice, long maxPrice, int priceTierCount, CancellationToken ct)
+    private async Task<RawItemListingDto> FetchVolumeListingAsync(
+        Guid itemConfigId,
+        IPriceTierQuantizer quantizer,
+        long minPrice,
+        long maxPrice,
+        int priceTierCount,
+        CancellationToken ct)
     {
-        // 1. Group Lots by existing quantized price (server expects quantized prices in DB)
-        var lotBuckets = await _aucyDb.Lots
-            .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.IsMatched)
-            .GroupBy(l => l.UnitPrice)
-            .Select(g => new { Price = g.Key, Volume = g.Sum(l => (long)l.RemainingQuantity) })
-            .ToArrayAsync(ct);
-
-        // 2. Group Bids by existing quantized bid price
-        var bidBuckets = await _aucyDb.Bids
-            .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0 && b.IsMatched)
-            .GroupBy(b => b.BidPrice)
-            .Select(g => new { Price = g.Key, Volume = g.Sum(b => (long)b.RemainingQuantity) })
+        var volumes = await _aucyDb.Lots
+            .Where(l =>
+                l.ItemConfigId == itemConfigId &&
+                l.RemainingQuantity > 0 &&
+                l.IsMatched)
+            .Select(l => new
+            {
+                Price = l.UnitPrice,
+                LotQuantity = (long)l.RemainingQuantity,
+                BidQuantity = 0L
+            })
+            .Concat(
+                _aucyDb.Bids
+                    .Where(b =>
+                        b.ItemConfigId == itemConfigId &&
+                        b.RemainingQuantity > 0 &&
+                        b.IsMatched)
+                    .Select(b => new
+                    {
+                        Price = b.BidPrice,
+                        LotQuantity = 0L,
+                        BidQuantity = (long)b.RemainingQuantity
+                    }))
+            .GroupBy(x => x.Price)
+            .Select(g => new
+            {
+                Price = g.Key,
+                LotQuantity = g.Sum(x => x.LotQuantity),
+                BidQuantity = g.Sum(x => x.BidQuantity)
+            })
             .ToArrayAsync(ct);
 
         var levels = new RawPriceLevelTuple[priceTierCount];
 
-        // initialize representative prices
         for (var i = 0; i < priceTierCount; i++)
-            levels[i] = new RawPriceLevelTuple(price: quantizer.GetPriceForTier(minPrice, maxPrice, priceTierCount, i), lotQuantity: 0, bidQuantity: 0);
-
-        // populate lot volumes
-        foreach (var lb in lotBuckets)
         {
-            var idx = quantizer.GetTierIndex(minPrice, maxPrice, priceTierCount, lb.Price);
-            if (idx >= 0 && idx < levels.Length)
-                levels[idx].LotQuantity += lb.Volume;
-            // ignore out-of-range prices
+            quantizer.TryGetPriceForTier(
+                minPrice,
+                maxPrice,
+                priceTierCount,
+                i,
+                out var price);
+
+            levels[i] = new RawPriceLevelTuple(
+                price: price,
+                lotQuantity: 0,
+                bidQuantity: 0);
         }
 
-        // populate bid volumes
-        foreach (var bb in bidBuckets)
+        foreach (var volume in volumes)
         {
-            var idx = quantizer.GetTierIndex(minPrice, maxPrice, priceTierCount, bb.Price);
-            if (idx >= 0 && idx < levels.Length)
-                levels[idx].BidQuantity += bb.Volume;
-            // ignore out-of-range prices
+            if (!quantizer.TryGetTierIndex(
+                    minPrice,
+                    maxPrice,
+                    priceTierCount,
+                    volume.Price,
+                    out var tierIndex))
+            {
+                continue;
+            }
+
+            levels[tierIndex].LotQuantity += volume.LotQuantity;
+            levels[tierIndex].BidQuantity += volume.BidQuantity;
         }
 
-        return new RawItemListingDto { Levels = levels };
+        return new RawItemListingDto
+        {
+            Levels = levels
+        };
     }
 }
