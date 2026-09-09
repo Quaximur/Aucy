@@ -20,7 +20,8 @@ public class OrderBookHelper(
     IDbContextFactory<AucyDbContext> aucyDbFactory,
     IMapper mapper,
     IDistributedReaderWriterLockProvider rwLockProvider,
-    IDistributedLockProvider lockProvider) : IOrderBookHelper
+    IDistributedLockProvider lockProvider,
+    IPriceTierQuantizer quantizer) : IOrderBookHelper
 {
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
     private readonly InventoryPropertiesHelper _inventoryProperties = inventoryPropertiesService;
@@ -28,43 +29,7 @@ public class OrderBookHelper(
     private readonly IMapper _mapper = mapper;
     private readonly IDistributedLockProvider _lockProvider = lockProvider;
     private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
-
-    private void ValidatePriceBelongsToTier(long price, ItemConfigDto cfg)
-    {
-        const int MAX_QUANTIZATION_SIZE = 20;
-        var minPrice = cfg.MinPrice;
-        var maxPrice = cfg.MaxPrice;
-        var priceRange = maxPrice - minPrice;
-
-        var desiredTiers = cfg.PriceTierCount <= 0 ? MAX_QUANTIZATION_SIZE : cfg.PriceTierCount;
-        var cappedDesired = Math.Min(desiredTiers, MAX_QUANTIZATION_SIZE);
-
-        int quantizationSize;
-        double ratio;
-
-        if (priceRange < cappedDesired)
-        {
-            quantizationSize = (int)priceRange + 1;
-            ratio = 1;
-        }
-        else
-        {
-            quantizationSize = cappedDesired;
-            ratio = (double)quantizationSize / priceRange;
-        }
-
-        // compute bucket index
-        var rawIndex = (price - minPrice) * ratio;
-        int index = rawIndex >= quantizationSize ? quantizationSize - 1 : (int)rawIndex;
-
-        long currentMin = minPrice + (long)Math.Ceiling(index / ratio);
-        long representative = currentMin;
-
-        if (price != representative)
-            throw new RpcException(new Status(StatusCode.InvalidArgument,
-                $"Price should belong to one of configured tiers. Provided price {price} maps to representative tier price {representative}.")
-            );
-    }
+    private readonly IPriceTierQuantizer _quantizer = quantizer;
 
     public async UnaryResult<LotCreatedDto> CreateLot(Guid userId, CreateLotDto request)
     {
@@ -88,7 +53,14 @@ public class OrderBookHelper(
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Price should be within range [{itemConfigDto.MinPrice}, {itemConfigDto.MaxPrice}]"));
 
         // Validate that provided price matches one of configured price tiers
-        ValidatePriceBelongsToTier(request.UnitPrice, itemConfigDto);
+        try
+        {
+            _quantizer.ValidatePriceBelongsToTier(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, itemConfigDto.PriceTierCount, request.UnitPrice);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
 
         if (request.TotalQuantity > itemConfigDto.MaxSellQuantity)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Can`t create a lot with more than {itemConfigDto.MaxSellQuantity} items"));
@@ -552,7 +524,14 @@ public class OrderBookHelper(
         if (request.BidPrice < itemConfigDto.MinPrice || request.BidPrice > itemConfigDto.MaxPrice)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Price should be within range [{itemConfigDto.MinPrice}, {itemConfigDto.MaxPrice}]"));
         // Validate that provided price matches one of configured price tiers
-        ValidatePriceBelongsToTier(request.BidPrice, itemConfigDto);
+        try
+        {
+            _quantizer.ValidatePriceBelongsToTier(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, itemConfigDto.PriceTierCount, request.BidPrice);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
 
         if (request.TotalQuantity > itemConfigDto.MaxBuyQuantity)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Can`t create a bid for more than {itemConfigDto.MaxBuyQuantity} items"));

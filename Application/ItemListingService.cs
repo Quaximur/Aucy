@@ -5,17 +5,19 @@ using MagicOnion;
 using MagicOnion.Server;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Aucy.Application.Helpers;
 
 namespace Aucy.Application;
 
 [Authorize]
-public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItemListingService>,
+public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer quantizer) : ServiceBase<IItemListingService>,
 #pragma warning disable CS8644
     IItemListingService
 #pragma warning disable CS8644
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
     private const int NOTIFY_COOLDOWN_MS = 10_000;
+    private readonly IPriceTierQuantizer _quantizer = quantizer;
 
     public async Task<ServerStreamingResult<RawItemListingDto>> GetItemListingStream(Guid itemConfigId)
     {
@@ -32,19 +34,9 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
                 .FirstOrDefaultAsync()
                     ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
-            long priceRange = cfg.MaxPrice - cfg.MinPrice;
-            int quantizationSize = cfg.PriceTierCount;
-            int cappedDesired = cfg.PriceTierCount;
-            double ratio = (double)quantizationSize / priceRange; // Scale factor to map prices cleanly into [0 ... QUANTIZATION_SIZE - 1]
-
             while (!cancellationToken.IsCancellationRequested)
             {
-                var currentListing = await FetchVolumeListingAsync(itemConfigId,
-                    minPrice: cfg.MinPrice,
-                    maxPrice: cfg.MaxPrice,
-                    ratio: ratio,
-                    quantizationSize: quantizationSize,
-                    cancellationToken);
+                var currentListing = await FetchVolumeListingAsync(itemConfigId, _quantizer, cfg.MinPrice, cfg.MaxPrice, cfg.PriceTierCount, cancellationToken);
 
                 await stream.WriteAsync(currentListing);
 
@@ -64,65 +56,56 @@ public class ItemListingService(AucyDbContext aucyDbContext) : ServiceBase<IItem
     }
 
     private async Task<RawItemListingDto> FetchVolumeListingAsync(Guid itemConfigId,
-        long minPrice, long maxPrice, double ratio, int quantizationSize, CancellationToken ct)
+        IPriceTierQuantizer quantizer, long minPrice, long maxPrice, int priceTierCount, CancellationToken ct)
     {
-        // 1. Group Lots safely with SQL CASE WHEN translation
+        // 1. Group Lots by existing quantized price (server expects quantized prices in DB)
         var lotBuckets = await _aucyDb.Lots
             .Where(l => l.ItemConfigId == itemConfigId && l.RemainingQuantity > 0 && l.IsMatched)
-            .GroupBy(l => (int)((l.UnitPrice - minPrice) * ratio) >= quantizationSize
-                ? quantizationSize - 1
-                : (int)((l.UnitPrice - minPrice) * ratio))
-            .Select(g => new { BucketIndex = g.Key, Volume = g.Sum(l => (long)l.RemainingQuantity) })
-            .OrderBy(x => x.BucketIndex)
+            .GroupBy(l => l.UnitPrice)
+            .Select(g => new { Price = g.Key, Volume = g.Sum(l => (long)l.RemainingQuantity) })
             .ToArrayAsync(ct);
 
-        // 2. Group Bids safely with SQL CASE WHEN translation
+        // 2. Group Bids by existing quantized bid price
         var bidBuckets = await _aucyDb.Bids
             .Where(b => b.ItemConfigId == itemConfigId && b.RemainingQuantity > 0 && b.IsMatched)
-            .GroupBy(b => (int)((b.BidPrice - minPrice) * ratio) >= quantizationSize
-                ? quantizationSize - 1
-                : (int)((b.BidPrice - minPrice) * ratio))
-            .Select(g => new { BucketIndex = g.Key, Volume = g.Sum(b => (long)b.RemainingQuantity) })
-            .OrderBy(x => x.BucketIndex)
+            .GroupBy(b => b.BidPrice)
+            .Select(g => new { Price = g.Key, Volume = g.Sum(b => (long)b.RemainingQuantity) })
             .ToArrayAsync(ct);
 
-        var levels = new RawPriceLevelTuple[quantizationSize];
-        int li = 0;
-        int bi = 0;
+        var levels = new RawPriceLevelTuple[priceTierCount];
 
-        // 3. Reconstruct intervals perfectly on the application side
-        for (var i = 0; i < quantizationSize; i++)
+        // initialize representative prices
+        for (var i = 0; i < priceTierCount; i++)
         {
-            // Reverse engineer the min/max price boundaries for this specific bucket
-            long currentMin = minPrice + (long)Math.Ceiling(i / ratio);
+            levels[i] = new RawPriceLevelTuple(price: quantizer.GetRepresentativePriceForIndex(minPrice, maxPrice, priceTierCount, i), lotQuantity: 0, bidQuantity: 0);
+        }
 
-            // Ensure the last bucket seals perfectly up to maxPrice
-            long currentMax;
-
-            if (i == quantizationSize - 1)
-                currentMax = maxPrice;
-            else
-                currentMax = minPrice + (long)Math.Ceiling((i + 1) / ratio) - 1;
-
-            // Use the currentMin as the representative price for the tier
-            var levelTuple = new RawPriceLevelTuple(
-                price: currentMin,
-                lotQuantity: 0,
-                bidQuantity: 0);
-
-            if (li < lotBuckets.Length && lotBuckets[li].BucketIndex == i)
+        // populate lot volumes
+        foreach (var lb in lotBuckets)
+        {
+            try
             {
-                levelTuple.LotQuantity = lotBuckets[li].Volume;
-                li++;
+                var idx = quantizer.GetIndexForPrice(minPrice, maxPrice, priceTierCount, lb.Price);
+                levels[idx].LotQuantity += lb.Volume;
             }
-
-            if (bi < bidBuckets.Length && bidBuckets[bi].BucketIndex == i)
+            catch
             {
-                levelTuple.BidQuantity = bidBuckets[bi].Volume;
-                bi++;
+                // ignore out-of-range prices; they are unexpected if DB prices are quantized
             }
+        }
 
-            levels[i] = levelTuple;
+        // populate bid volumes
+        foreach (var bb in bidBuckets)
+        {
+            try
+            {
+                var idx = quantizer.GetIndexForPrice(minPrice, maxPrice, priceTierCount, bb.Price);
+                levels[idx].BidQuantity += bb.Volume;
+            }
+            catch
+            {
+                // ignore out-of-range prices
+            }
         }
 
         return new RawItemListingDto { Levels = levels };

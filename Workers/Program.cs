@@ -18,6 +18,7 @@ builder.Services.AddSingleton<WorkerGroupNotifier>();
 builder.Services.AddSingleton<InventoryPropertiesHelper>();
 
 builder.Services.AddTransient<OrderBookWorker>();
+builder.Services.AddSingleton<IPriceTierQuantizer, PriceTierQuantizer>();
 
 var redisConnectionString =
            Environment.GetEnvironmentVariable("ConnectionStrings__Redis")

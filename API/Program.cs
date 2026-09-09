@@ -54,6 +54,8 @@ services.AddSingleton<IOrderBookHelper, OrderBookHelper>();
 services.AddSingleton<InventoryPropertiesHelper>();
 services.AddSingleton<ItemsHelper>();
 services.AddSingleton<WorkerGroupService>();
+// Price tier quantizer (stateless) singleton
+services.AddSingleton<Aucy.Application.Helpers.IPriceTierQuantizer, Aucy.Application.Helpers.PriceTierQuantizer>();
 
 services.AddGrpc();
 
