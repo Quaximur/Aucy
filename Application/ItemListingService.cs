@@ -83,29 +83,19 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
         // populate lot volumes
         foreach (var lb in lotBuckets)
         {
-            try
-            {
-                var idx = quantizer.GetIndexForPrice(minPrice, maxPrice, priceTierCount, lb.Price);
+            var idx = quantizer.GetIndexForPrice(minPrice, maxPrice, priceTierCount, lb.Price);
+            if (idx >= 0 && idx < levels.Length)
                 levels[idx].LotQuantity += lb.Volume;
-            }
-            catch
-            {
-                // ignore out-of-range prices; they are unexpected if DB prices are quantized
-            }
+            // ignore out-of-range prices
         }
 
         // populate bid volumes
         foreach (var bb in bidBuckets)
         {
-            try
-            {
-                var idx = quantizer.GetIndexForPrice(minPrice, maxPrice, priceTierCount, bb.Price);
+            var idx = quantizer.GetIndexForPrice(minPrice, maxPrice, priceTierCount, bb.Price);
+            if (idx >= 0 && idx < levels.Length)
                 levels[idx].BidQuantity += bb.Volume;
-            }
-            catch
-            {
-                // ignore out-of-range prices
-            }
+            // ignore out-of-range prices
         }
 
         return new RawItemListingDto { Levels = levels };

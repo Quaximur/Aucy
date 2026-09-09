@@ -53,14 +53,9 @@ public class OrderBookHelper(
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Price should be within range [{itemConfigDto.MinPrice}, {itemConfigDto.MaxPrice}]"));
 
         // Validate that provided price matches one of configured price tiers
-        try
-        {
-            _quantizer.ValidatePriceBelongsToTier(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, itemConfigDto.PriceTierCount, request.UnitPrice);
-        }
-        catch (ArgumentException ex)
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
-        }
+        if (!_quantizer.ValidatePriceBelongsToTier(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, itemConfigDto.PriceTierCount, request.UnitPrice))
+            throw new RpcException(new Status(StatusCode.InvalidArgument,
+                $"Price should belong to one of configured tiers. Provided price {request.UnitPrice} is not a valid tier representative."));
 
         if (request.TotalQuantity > itemConfigDto.MaxSellQuantity)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Can`t create a lot with more than {itemConfigDto.MaxSellQuantity} items"));
@@ -524,14 +519,9 @@ public class OrderBookHelper(
         if (request.BidPrice < itemConfigDto.MinPrice || request.BidPrice > itemConfigDto.MaxPrice)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Price should be within range [{itemConfigDto.MinPrice}, {itemConfigDto.MaxPrice}]"));
         // Validate that provided price matches one of configured price tiers
-        try
-        {
-            _quantizer.ValidatePriceBelongsToTier(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, itemConfigDto.PriceTierCount, request.BidPrice);
-        }
-        catch (ArgumentException ex)
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
-        }
+        if (!_quantizer.ValidatePriceBelongsToTier(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, itemConfigDto.PriceTierCount, request.BidPrice))
+            throw new RpcException(new Status(StatusCode.InvalidArgument,
+                $"Price should belong to one of configured tiers. Provided price {request.BidPrice} is not a valid tier representative."));
 
         if (request.TotalQuantity > itemConfigDto.MaxBuyQuantity)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Can`t create a bid for more than {itemConfigDto.MaxBuyQuantity} items"));
