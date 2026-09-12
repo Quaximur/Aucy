@@ -91,25 +91,57 @@ public sealed partial class OrderBookWorker(
 
         await using var aucyDb = scope.ServiceProvider.GetRequiredService<AucyDbContext>();
 
-        await using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
-
         List<WorkerPostEvent> workerEvents = [];
+        await using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
         try
         {
+            await aucyDb.Lots
+                .Where(x => x.ItemConfigId == itemConfigId && !x.IsMatched)
+                .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsMatched, true));
+
+            await aucyDb.Bids
+                .Where(x => x.ItemConfigId == itemConfigId && !x.IsMatched)
+                .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsMatched, true));
+
             // 1. Границы стакана (одним запросом)
             var bounds = await aucyDb.Database
-                .SqlQuery<PriceBounds>(@$"
+                    .SqlQuery<PriceBounds>(@$"
                 SELECT
                     (SELECT MIN(""UnitPrice"") FROM ""Lots""
-                     WHERE ""ItemConfigId"" = {itemConfigId} AND ""RemainingQuantity"" > 0) AS MinLotPrice,
+                     WHERE ""ItemConfigId"" = {itemConfigId} AND ""RemainingQuantity"" > 0) AS ""MinLotPrice"",
                     (SELECT MAX(""BidPrice"") FROM ""Bids""
-                     WHERE ""ItemConfigId"" = {itemConfigId} AND ""RemainingQuantity"" > 0) AS MaxBidPrice
+                     WHERE ""ItemConfigId"" = {itemConfigId} AND ""RemainingQuantity"" > 0) AS ""MaxBidPrice""
             ")
-                .FirstAsync();
+                    .FirstOrDefaultAsync();
 
-            var minLotPrice = bounds.MinLotPrice ?? long.MinValue;
-            var maxBidPrice = bounds.MaxBidPrice ?? long.MaxValue;
+            if (bounds == null)
+            {
+                await transaction.CommitAsync();
+                return;
+            }
+
+            long minLotPrice;
+            if (bounds.MinLotPrice.HasValue)
+            {
+                minLotPrice = bounds.MinLotPrice.Value;
+            }
+            else
+            {
+                await transaction.CommitAsync();
+                return;
+            }
+
+            long maxBidPrice;
+            if (bounds.MaxBidPrice.HasValue)
+            {
+                maxBidPrice = bounds.MaxBidPrice.Value;
+            }
+            else
+            {
+                await transaction.CommitAsync();
+                return;
+            }
 
             if (minLotPrice > maxBidPrice)
             {
@@ -217,13 +249,7 @@ public sealed partial class OrderBookWorker(
             await ApplyDeltasAsync(aucyDb, inventoryProperties, itemConfigId, lotDeltas, bidDeltas);
 
             // 6. Помечаем всё немэтченное как IsMatched (как было)
-            await aucyDb.Lots
-                .Where(x => x.ItemConfigId == itemConfigId && !x.IsMatched)
-                .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsMatched, true));
 
-            await aucyDb.Bids
-                .Where(x => x.ItemConfigId == itemConfigId && !x.IsMatched)
-                .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsMatched, true));
 
             await transaction.CommitAsync();
 
@@ -451,7 +477,7 @@ public sealed partial class OrderBookWorker(
 
             foreach (var (userId, amount) in refundsByUser)
             {
-                if (amount == 0) 
+                if (amount == 0)
                     continue;
                 await inventoryProperties.DepositMoney(aucyDb, userId, amount);
             }
