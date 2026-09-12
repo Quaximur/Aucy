@@ -413,16 +413,19 @@ public sealed partial class OrderBookWorker(
                 var e = chunk[i];
                 var currentParamIndex1 = parameters.Count;
                 var currentParamIndex2 = parameters.Count + 1;
+                var currentParamIndex3 = parameters.Count + 2;
 
-                valuesList.Add($"(@p{currentParamIndex1}, @p{currentParamIndex2})");
+                valuesList.Add($"(@p{currentParamIndex1}, @p{currentParamIndex2}), @p{currentParamIndex3}");
                 parameters.Add(new NpgsqlParameter($"p{currentParamIndex1}", e.Id));
                 parameters.Add(new NpgsqlParameter($"p{currentParamIndex2}", e.RemainingQuantity));
+                parameters.Add(new NpgsqlParameter($"p{currentParamIndex3}", e.ExtraSoldoutMoney));
             }
 
             await aucyDb.Database.ExecuteSqlRawAsync($@"
                 UPDATE ""Lots"" AS l
-                SET ""RemainingQuantity"" = v.qty
-                FROM (VALUES {string.Join(", ", valuesList)}) AS v(id, qty)
+                SET ""RemainingQuantity"" = v.qty,
+                ""ExtraSoldoutMoney"" = v.ext
+                FROM (VALUES {string.Join(", ", valuesList)}) AS v(id, qty, ext)
                 WHERE l.""Id"" = v.id",
                 parameters);
         }
