@@ -31,6 +31,15 @@ public sealed partial class OrderBookWorker(
         long BidPrice,
         DateTime CreatedAt);
 
+    // Combined shape for the single wedge query: 'L' rows map to LotRow, 'B' rows map to BidRow.
+    private sealed record MatchRow(
+        string Kind,
+        Guid Id,
+        Guid UserId,
+        int RemainingQuantity,
+        long Price,
+        DateTime CreatedAt);
+
     private sealed record PriceBounds(long? MinLotPrice, long? MaxBidPrice);
 
     private sealed class LotDelta
@@ -66,7 +75,7 @@ public sealed partial class OrderBookWorker(
     {
         while (true)
         {
-            await ProcessMatchingTickAsync(itemConfigId); // TODO: V2
+            await ProcessMatchingTickAsyncV2(itemConfigId);
             await Task.Delay(INTERVAL_MS);
         }
     }
@@ -127,40 +136,76 @@ public sealed partial class OrderBookWorker(
                 return;
             }
 
-            // 3. Загружаем ТОЛЬКО клин: лоты до покрытия totalBidDemand, биды до покрытия totalLotSupply
-            var lots = await aucyDb.Database
-                .SqlQuery<LotRow>($@"
-                SELECT ""Id"", ""OwnerUserId"", ""RemainingQuantity"", ""UnitPrice"", ""CreatedAt""
-                FROM (
-                    SELECT *,
-                           SUM(""RemainingQuantity"") OVER (
-                               ORDER BY ""UnitPrice"", ""CreatedAt"", ""Id""
-                           ) AS ""RunningQty""
+            // 3. Загружаем ТОЛЬКО клин: лоты до покрытия totalBidDemand, биды до покрытия totalLotSupply.
+            //    Один комбинированный запрос вместо двух отдельных: дискриминатор "Kind" ('L'/'B')
+            //    позволяет разложить результат по двум спискам на стороне C#, сохраняя нужный
+            //    порядок внутри каждой группы (лоты — по возрастанию цены, биды — по убыванию).
+            //    ROWS BETWEEN ... явно фиксирует поведение running-sum окна независимо от совпадений
+            //    по (Price, CreatedAt) — уникальность "Id" в ORDER BY гарантирует отсутствие "peers",
+            //    но явный ROWS делает это независимым от дефолтного RANGE-поведения Postgres.
+            var wedgeRows = await aucyDb.Database
+                .SqlQuery<MatchRow>($@"
+                WITH ranked_lots AS (
+                    SELECT
+                        ""Id"", ""OwnerUserId"", ""RemainingQuantity"", ""UnitPrice"", ""CreatedAt"",
+                        SUM(""RemainingQuantity"") OVER (
+                            ORDER BY ""UnitPrice"", ""CreatedAt"", ""Id""
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                        ) AS ""RunningQty""
                     FROM ""Lots""
                     WHERE ""ItemConfigId"" = {itemConfigId}
                       AND ""RemainingQuantity"" > 0
                       AND ""UnitPrice"" <= {maxBidPrice}
-                ) t
-                WHERE ""RunningQty"" - ""RemainingQuantity"" < {totalBidDemand}
-                ORDER BY ""UnitPrice"", ""CreatedAt"", ""Id""")
-                .ToListAsync();
-
-            var bids = await aucyDb.Database
-                .SqlQuery<BidRow>($@"
-                SELECT ""Id"", ""BidderUserId"", ""RemainingQuantity"", ""BidPrice"", ""CreatedAt""
-                FROM (
-                    SELECT *,
-                           SUM(""RemainingQuantity"") OVER (
-                               ORDER BY ""BidPrice"" DESC, ""CreatedAt"", ""Id""
-                           ) AS ""RunningQty""
+                ),
+                ranked_bids AS (
+                    SELECT
+                        ""Id"", ""BidderUserId"", ""RemainingQuantity"", ""BidPrice"", ""CreatedAt"",
+                        SUM(""RemainingQuantity"") OVER (
+                            ORDER BY ""BidPrice"" DESC, ""CreatedAt"", ""Id""
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                        ) AS ""RunningQty""
                     FROM ""Bids""
                     WHERE ""ItemConfigId"" = {itemConfigId}
                       AND ""RemainingQuantity"" > 0
                       AND ""BidPrice"" >= {minLotPrice}
-                ) t
+                )
+                SELECT
+                    'L'             AS ""Kind"",
+                    ""Id"",
+                    ""OwnerUserId""  AS ""UserId"",
+                    ""RemainingQuantity"",
+                    ""UnitPrice""    AS ""Price"",
+                    ""CreatedAt"",
+                    ""UnitPrice""    AS ""SortKey""
+                FROM ranked_lots
+                WHERE ""RunningQty"" - ""RemainingQuantity"" < {totalBidDemand}
+
+                UNION ALL
+
+                SELECT
+                    'B'              AS ""Kind"",
+                    ""Id"",
+                    ""BidderUserId""  AS ""UserId"",
+                    ""RemainingQuantity"",
+                    ""BidPrice""      AS ""Price"",
+                    ""CreatedAt"",
+                    -""BidPrice""     AS ""SortKey""
+                FROM ranked_bids
                 WHERE ""RunningQty"" - ""RemainingQuantity"" < {totalLotSupply}
-                ORDER BY ""BidPrice"" DESC, ""CreatedAt"", ""Id""")
+
+                ORDER BY ""Kind"", ""SortKey"", ""CreatedAt"", ""Id""")
                 .ToListAsync();
+
+            var lots = new List<LotRow>(wedgeRows.Count);
+            var bids = new List<BidRow>(wedgeRows.Count);
+
+            foreach (var row in wedgeRows)
+            {
+                if (row.Kind == "L")
+                    lots.Add(new LotRow(row.Id, row.UserId, row.RemainingQuantity, row.Price, row.CreatedAt));
+                else
+                    bids.Add(new BidRow(row.Id, row.UserId, row.RemainingQuantity, row.Price, row.CreatedAt));
+            }
 
             // 4. Матчинг + накопление дельт для bulk update
             var lotDeltas = new Dictionary<Guid, LotDelta>();
@@ -218,12 +263,12 @@ public sealed partial class OrderBookWorker(
     }
 
     private void MatchOrdersInMemory(
-    List<LotRow> lots,
-    List<BidRow> bids,
-    Guid itemConfigId,
-    List<WorkerPostEvent> workerEvents,
-    Dictionary<Guid, LotDelta> lotDeltas,
-    Dictionary<Guid, BidDelta> bidDeltas)
+        List<LotRow> lots,
+        List<BidRow> bids,
+        Guid itemConfigId,
+        List<WorkerPostEvent> workerEvents,
+        Dictionary<Guid, LotDelta> lotDeltas,
+        Dictionary<Guid, BidDelta> bidDeltas)
     {
         int lotIndex = 0;
         int bidIndex = 0;
@@ -259,16 +304,16 @@ public sealed partial class OrderBookWorker(
                 if (lotCreatedFirst)
                 {
                     long extraProfit = (currentBid.BidPrice - clearingPrice) * matchQuantity;
-                    // Депонируем биддеру — суммируем в bidDelta
                     var bd = GetBidDelta(bidDeltas, currentBid.Id);
+
                     bd.ExtraMoney += extraProfit;
-                    bd.QtyBought += 0; // уже накопится ниже
                     bidEvent.ExtraMoney += extraProfit;
                 }
                 else
                 {
                     long extraProfit = (clearingPrice - currentLot.UnitPrice) * matchQuantity;
                     var ld = GetLotDelta(lotDeltas, currentLot.Id);
+
                     ld.ExtraSoldoutMoney += extraProfit;
                     lotEvent.ExtraMoney += extraProfit;
                 }
@@ -406,7 +451,8 @@ public sealed partial class OrderBookWorker(
 
             foreach (var (userId, amount) in refundsByUser)
             {
-                if (amount == 0) continue;
+                if (amount == 0) 
+                    continue;
                 await inventoryProperties.DepositMoney(aucyDb, userId, amount);
             }
         }
