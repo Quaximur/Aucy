@@ -62,7 +62,6 @@ public class OrderHub(WorkerGroupService workerGroupService,
 
         var lotsWithItemConfigs = await aucyDb.Lots
            .Where(l => l.OwnerUserId == _userId)
-           .Include(l => l.ItemConfig)
            .Select(l => _mapper.Map<OwnLotDto>(l))
            .ToListAsync();
 
@@ -70,7 +69,6 @@ public class OrderHub(WorkerGroupService workerGroupService,
 
         var ownBids = await aucyDb.Bids
             .Where(b => b.BidderUserId == _userId)
-            .Include(b => b.ItemConfig)
             .Select(b => _mapper.Map<OwnBidDto>(b))
             .ToListAsync();
 
