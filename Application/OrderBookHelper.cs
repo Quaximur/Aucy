@@ -357,7 +357,8 @@ public class OrderBookHelper(
 
                 await transaction.CommitAsync();
 
-                _logger.LogInformation("Removed lot {LotId} for user {UserId} with itemConfig {ItemConfigId}", lotFields.Id, userId, lotFields.ItemConfigId);
+                _logger.LogInformation("Removed {RemovedLotQuantity} of lot {LotId} for user {UserId} with itemConfig {ItemConfigId}",
+                    quantityToRemove, lotFields.Id, userId, lotFields.ItemConfigId);
 
                 return new LotRemovedDto(lotId: request.LotId,
                     itemConfigId: lotFields.ItemConfigId,
@@ -798,8 +799,8 @@ public class OrderBookHelper(
 
                 await transaction.CommitAsync();
 
-                _logger.LogInformation("Removed bid {BidId} for user {UserId} with itemConfig {ItemConfigId}",
-                   bidFields.Id, userId, bidFields.ItemConfigId);
+                _logger.LogInformation("Removed {RemovedBidQuantity} of bid {BidId} for user {UserId} with itemConfig {ItemConfigId} with {BidReturningMoney} returning money",
+                   quantityToRemove, bidFields.Id, userId, bidFields.ItemConfigId, returningMoney);
 
                 return new BidRemovedDto(bidId: bidFields.Id,
                     returningMoney: returningMoney,
