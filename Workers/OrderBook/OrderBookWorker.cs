@@ -104,7 +104,6 @@ public sealed partial class OrderBookWorker(
                 .Where(x => x.ItemConfigId == itemConfigId && !x.IsMatched)
                 .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsMatched, true));
 
-            // 1. Границы стакана (одним запросом)
             var bounds = await aucyDb.Database
                     .SqlQuery<PriceBounds>(@$"
                 SELECT
@@ -149,7 +148,6 @@ public sealed partial class OrderBookWorker(
                 return;
             }
 
-            // 2. Суммарный спрос/предложение по пересекающимся заявкам
             var totalBidDemand = await aucyDb.Bids
                 .Where(b => b.ItemConfigId == itemConfigId
                          && b.RemainingQuantity > 0
@@ -168,7 +166,7 @@ public sealed partial class OrderBookWorker(
                 return;
             }
 
-            // 3. Загружаем ТОЛЬКО клин: лоты до покрытия totalBidDemand, биды до покрытия totalLotSupply.
+            //    Загружаем ТОЛЬКО клин: лоты до покрытия totalBidDemand, биды до покрытия totalLotSupply.
             //    Один комбинированный запрос вместо двух отдельных: дискриминатор "Kind" ('L'/'B')
             //    позволяет разложить результат по двум спискам на стороне C#, сохраняя нужный
             //    порядок внутри каждой группы (лоты — по возрастанию цены, биды — по убыванию).
@@ -239,21 +237,14 @@ public sealed partial class OrderBookWorker(
                     bids.Add(new BidRow(row.Id, row.UserId, row.RemainingQuantity, row.Price, row.CreatedAt));
             }
 
-            // 4. Матчинг + накопление дельт для bulk update
             var lotDeltas = new Dictionary<Guid, LotDelta>();
             var bidDeltas = new Dictionary<Guid, BidDelta>();
 
             MatchOrdersInMemory(lots, bids, itemConfigId, workerEvents, lotDeltas, bidDeltas);
 
-            // 5. Bulk-запись через SQL (без трекинга)
             await ApplyDeltasAsync(aucyDb, inventoryProperties, itemConfigId, lotDeltas, bidDeltas);
-
-            // 6. Помечаем всё немэтченное как IsMatched (как было)
-
-
             await transaction.CommitAsync();
 
-            // 7. Нотификации после коммита
             try
             {
                 foreach (var workerEvent in workerEvents)
@@ -349,7 +340,6 @@ public sealed partial class OrderBookWorker(
                 clearingPrice = currentLot.UnitPrice;
             }
 
-            // Обновляем локальные копии
             lots[lotIndex] = currentLot with { RemainingQuantity = currentLot.RemainingQuantity - matchQuantity };
             bids[bidIndex] = currentBid with { RemainingQuantity = currentBid.RemainingQuantity - matchQuantity };
 
@@ -418,8 +408,6 @@ public sealed partial class OrderBookWorker(
         if (lotDeltas.Count == 0 && bidDeltas.Count == 0)
             return;
 
-        // ---- Лоты: RemainingQuantity -= QtySold, ExtraSoldoutMoney += Extra ----
-        // Делаем пачками, чтобы не упереться в лимит параметров
         foreach (var chunk in lotDeltas.Chunk(200))
         {
             var ids = chunk.Select(kv => kv.Key).ToArray();
@@ -438,7 +426,6 @@ public sealed partial class OrderBookWorker(
                 new NpgsqlParameter("ids", ids));
         }
 
-        // ---- Биды: RemainingQuantity -= QtyBought ----
         foreach (var chunk in bidDeltas.Chunk(200))
         {
             var ids = chunk.Select(kv => kv.Key).ToArray();
@@ -453,8 +440,6 @@ public sealed partial class OrderBookWorker(
                 new NpgsqlParameter("ids", ids));
         }
 
-        // ---- Возвраты биддерам (extraProfit) ----
-        // Если BidDelta хранит ExtraMoney — соберём по userId и сделаем один депозит на юзера.
         var refundsByBidId = bidDeltas
             .Where(kv => kv.Value.ExtraMoney > 0)
             .ToDictionary(kv => kv.Key, kv => kv.Value.ExtraMoney);
