@@ -50,6 +50,7 @@ public sealed partial class OrderBookWorker(
 
     private sealed class BidDelta
     {
+        public Guid BidderUserId;
         public int QtyBought;
         public long ExtraMoney;
     }
@@ -237,12 +238,16 @@ public sealed partial class OrderBookWorker(
                     bids.Add(new BidRow(row.Id, row.UserId, row.RemainingQuantity, row.Price, row.CreatedAt));
             }
 
-            var lotDeltas = new Dictionary<Guid, LotDelta>();
-            var bidDeltas = new Dictionary<Guid, BidDelta>();
+            // Index-based delta accumulators: each Lot/Bid row appears exactly once in its
+            // list, and lotIndex/bidIndex only advance once an order is fully filled — so
+            // list position is a stable 1:1 stand-in for Id for as long as the loop runs.
+            // No Dictionary<Guid, ...> hashing/lookup needed; a plain array access suffices.
+            var lotDeltas = new LotDelta?[lots.Count];
+            var bidDeltas = new BidDelta?[bids.Count];
 
             MatchOrdersInMemory(lots, bids, itemConfigId, workerEvents, lotDeltas, bidDeltas);
 
-            await ApplyDeltasAsync(aucyDb, inventoryProperties, itemConfigId, lotDeltas, bidDeltas);
+            await ApplyDeltasAsync(aucyDb, inventoryProperties, itemConfigId, lots, lotDeltas, bids, bidDeltas);
             await transaction.CommitAsync();
 
             try
@@ -284,8 +289,8 @@ public sealed partial class OrderBookWorker(
         List<BidRow> bids,
         Guid itemConfigId,
         List<WorkerPostEvent> workerEvents,
-        Dictionary<Guid, LotDelta> lotDeltas,
-        Dictionary<Guid, BidDelta> bidDeltas)
+        LotDelta?[] lotDeltas,
+        BidDelta?[] bidDeltas)
     {
         int lotIndex = 0;
         int bidIndex = 0;
@@ -309,6 +314,9 @@ public sealed partial class OrderBookWorker(
 
             int matchQuantity = Math.Min(currentLot.RemainingQuantity, currentBid.RemainingQuantity);
 
+            var ld = lotDeltas[lotIndex] ??= new LotDelta();
+            var bd = bidDeltas[bidIndex] ??= new BidDelta { BidderUserId = currentBid.BidderUserId };
+
             long clearingPrice;
             if (currentLot.UnitPrice != currentBid.BidPrice)
             {
@@ -321,16 +329,12 @@ public sealed partial class OrderBookWorker(
                 if (lotCreatedFirst)
                 {
                     long extraProfit = (currentBid.BidPrice - clearingPrice) * matchQuantity;
-                    var bd = GetBidDelta(bidDeltas, currentBid.Id);
-
                     bd.ExtraMoney += extraProfit;
                     bidEvent.ExtraMoney += extraProfit;
                 }
                 else
                 {
                     long extraProfit = (clearingPrice - currentLot.UnitPrice) * matchQuantity;
-                    var ld = GetLotDelta(lotDeltas, currentLot.Id);
-
                     ld.ExtraSoldoutMoney += extraProfit;
                     lotEvent.ExtraMoney += extraProfit;
                 }
@@ -343,8 +347,8 @@ public sealed partial class OrderBookWorker(
             lots[lotIndex] = currentLot with { RemainingQuantity = currentLot.RemainingQuantity - matchQuantity };
             bids[bidIndex] = currentBid with { RemainingQuantity = currentBid.RemainingQuantity - matchQuantity };
 
-            GetLotDelta(lotDeltas, currentLot.Id).QtySold += matchQuantity;
-            GetBidDelta(bidDeltas, currentBid.Id).QtyBought += matchQuantity;
+            ld.QtySold += matchQuantity;
+            bd.QtyBought += matchQuantity;
 
             lotEvent.Quantity += matchQuantity;
             bidEvent.Quantity += matchQuantity;
@@ -378,43 +382,39 @@ public sealed partial class OrderBookWorker(
             workerEvents.Add(lotEvent);
     }
 
-    private static LotDelta GetLotDelta(Dictionary<Guid, LotDelta> d, Guid id)
-    {
-        if (!d.TryGetValue(id, out var v))
-        {
-            v = new LotDelta();
-            d[id] = v;
-        }
-        return v;
-    }
-
-    private static BidDelta GetBidDelta(Dictionary<Guid, BidDelta> d, Guid id)
-    {
-        if (!d.TryGetValue(id, out var v))
-        {
-            v = new BidDelta();
-            d[id] = v;
-        }
-        return v;
-    }
-
     private async Task ApplyDeltasAsync(
         AucyDbContext aucyDb,
         InventoryPropertiesHelper inventoryProperties,
         Guid itemConfigId,
-        Dictionary<Guid, LotDelta> lotDeltas,
-        Dictionary<Guid, BidDelta> bidDeltas)
+        List<LotRow> lots,
+        LotDelta?[] lotDeltas,
+        List<BidRow> bids,
+        BidDelta?[] bidDeltas)
     {
-        if (lotDeltas.Count == 0 && bidDeltas.Count == 0)
+        var lotEntries = new List<(Guid Id, LotDelta Delta)>();
+        for (int i = 0; i < lots.Count; i++)
+        {
+            if (lotDeltas[i] is { } d)
+                lotEntries.Add((lots[i].Id, d));
+        }
+
+        var bidEntries = new List<(Guid Id, BidDelta Delta)>();
+        for (int i = 0; i < bids.Count; i++)
+        {
+            if (bidDeltas[i] is { } d)
+                bidEntries.Add((bids[i].Id, d));
+        }
+
+        if (lotEntries.Count == 0 && bidEntries.Count == 0)
             return;
 
-        foreach (var chunk in lotDeltas.Chunk(200))
+        foreach (var chunk in lotEntries.Chunk(200))
         {
-            var ids = chunk.Select(kv => kv.Key).ToArray();
-            var caseQty = string.Join(" ", chunk.Select(kv =>
-                $"WHEN \"Id\" = '{kv.Key}' THEN {kv.Value.QtySold}"));
-            var caseExtra = string.Join(" ", chunk.Select(kv =>
-                $"WHEN \"Id\" = '{kv.Key}' THEN {kv.Value.ExtraSoldoutMoney}"));
+            var ids = chunk.Select(e => e.Id).ToArray();
+            var caseQty = string.Join(" ", chunk.Select(e =>
+                $"WHEN \"Id\" = '{e.Id}' THEN {e.Delta.QtySold}"));
+            var caseExtra = string.Join(" ", chunk.Select(e =>
+                $"WHEN \"Id\" = '{e.Id}' THEN {e.Delta.ExtraSoldoutMoney}"));
 
             await aucyDb.Database.ExecuteSqlRawAsync($@"
             UPDATE ""Lots""
@@ -426,11 +426,11 @@ public sealed partial class OrderBookWorker(
                 new NpgsqlParameter("ids", ids));
         }
 
-        foreach (var chunk in bidDeltas.Chunk(200))
+        foreach (var chunk in bidEntries.Chunk(200))
         {
-            var ids = chunk.Select(kv => kv.Key).ToArray();
-            var caseQty = string.Join(" ", chunk.Select(kv =>
-                $"WHEN \"Id\" = '{kv.Key}' THEN {kv.Value.QtyBought}"));
+            var ids = chunk.Select(e => e.Id).ToArray();
+            var caseQty = string.Join(" ", chunk.Select(e =>
+                $"WHEN \"Id\" = '{e.Id}' THEN {e.Delta.QtyBought}"));
 
             await aucyDb.Database.ExecuteSqlRawAsync($@"
             UPDATE ""Bids""
@@ -440,37 +440,22 @@ public sealed partial class OrderBookWorker(
                 new NpgsqlParameter("ids", ids));
         }
 
-        var refundsByBidId = bidDeltas
-            .Where(kv => kv.Value.ExtraMoney > 0)
-            .ToDictionary(kv => kv.Key, kv => kv.Value.ExtraMoney);
+        // Refunds grouped by BidderUserId already stored on the delta — no re-query of "Bids".
+        var refundsByUser = bidEntries
+            .Where(e => e.Delta.ExtraMoney > 0)
+            .GroupBy(e => e.Delta.BidderUserId)
+            .ToDictionary(g => g.Key, g => g.Sum(e => e.Delta.ExtraMoney));
 
-        if (refundsByBidId.Count > 0)
+        foreach (var (userId, amount) in refundsByUser)
         {
-            var bidIds = refundsByBidId.Keys.ToArray();
-
-            var owners = await aucyDb.Bids
-                .AsNoTracking()
-                .Where(b => bidIds.Contains(b.Id))
-                .Select(b => new { b.Id, b.BidderUserId })
-                .ToListAsync();
-
-            var refundsByUser = owners
-                .GroupBy(o => o.BidderUserId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Sum(o => refundsByBidId[o.Id]));
-
-            foreach (var (userId, amount) in refundsByUser)
-            {
-                if (amount == 0)
-                    continue;
-                await inventoryProperties.DepositMoney(aucyDb, userId, amount);
-            }
+            if (amount == 0)
+                continue;
+            await inventoryProperties.DepositMoney(aucyDb, userId, amount);
         }
     }
 
     // TODO: use checked() for money
-    private async Task ProcessMatchingTickAsync(Guid itemConfigId)
+    private async Task ProcessMatchingTickAsyncV1(Guid itemConfigId)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
 
@@ -679,9 +664,10 @@ public sealed partial class OrderBookWorker(
 
         }
 
-        if (lotIndex >= lots.Count && bidIndex < bids.Count)
+        if (bidEvent.Quantity > 0)
             workerEvents.Add(bidEvent);
-        else if (lotIndex < lots.Count && bidIndex >= bids.Count)
+        
+        if (lotEvent.Quantity > 0)
             workerEvents.Add(lotEvent);
 
         // Save changes to matched orders
