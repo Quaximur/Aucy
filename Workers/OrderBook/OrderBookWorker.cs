@@ -596,52 +596,77 @@ public sealed partial class OrderBookWorker(
         foreach (var chunk in lots.Take(totalLotEvents).Chunk(200))
         {
             var ids = chunk.Select(e => e.Id).ToArray();
-            var caseQty = string.Join(" ", chunk.Select(e =>
-                $"WHEN \"Id\" = '{e.Id}' THEN {e.RemainingQuantity}"));
-            var caseExtra = string.Join(" ", chunk.Select(e =>
-                $"WHEN \"Id\" = '{e.Id}' THEN {e.ExtraSoldoutMoney}"));
+
+            // VALUES ($1, $2), ($3, $4), ...
+            var valuesList = new List<string>();
+            var parameters = new List<NpgsqlParameter>();
+
+            for (var i = 0; i < chunk.Length; i++)
+            {
+                var e = chunk[i];
+                valuesList.Add($"(@p{parameters.Count}, @p{parameters.Count + 1})");
+                parameters.Add(new NpgsqlParameter($"p{parameters.Count}", e.Id));
+                parameters.Add(new NpgsqlParameter($"p{parameters.Count + 1}", e.RemainingQuantity));
+            }
 
             await aucyDb.Database.ExecuteSqlRawAsync($@"
-            UPDATE ""Lots""
-            SET ""RemainingQuantity"" = 
-                    (CASE {caseQty} ELSE 0 END),
-                ""ExtraSoldoutMoney"" = 
-                    (CASE {caseExtra} ELSE 0 END)
-            WHERE ""Id"" = ANY(@ids)",
-                new NpgsqlParameter("ids", ids));
+                UPDATE ""Lots"" AS l
+                SET ""RemainingQuantity"" = v.qty
+                FROM (VALUES {string.Join(", ", valuesList)}) AS v(id, qty)
+                WHERE l.""Id"" = v.id",
+                parameters);
         }
 
         foreach (var chunk in bids.Take(totalBidEvents).Chunk(200))
         {
-            var ids = chunk.Select(e => e.Id).ToArray();
-            var caseQty = string.Join(" ", chunk.Select(e =>
-                $"WHEN \"Id\" = '{e.Id}' THEN {e.RemainingQuantity}"));
+            var valuesList = new List<string>();
+            var parameters = new List<NpgsqlParameter>();
+            var hasExtraMoney = false;
 
-            await aucyDb.Database.ExecuteSqlRawAsync($@"
-            UPDATE ""Bids""
-            SET ""RemainingQuantity"" = 
-                    (CASE {caseQty} ELSE 0 END)
-            WHERE ""Id"" = ANY(@ids)",
-                new NpgsqlParameter("ids", ids));
-
-            var inventoryIds = new List<Guid>();
-            var caseMoney = new StringBuilder();
-
-            foreach (var bid in chunk)
+            for (var i = 0; i < chunk.Length; i++)
             {
-                if (bid.ExtraBuyoutMoney > 0)
-                {
-                    inventoryIds.Add(bid.OwnerUserId);
-                    caseMoney.Append($" WHEN \"Id\" = '{bid.Id}' THEN {bid.ExtraBuyoutMoney}");
-                }
+                var e = chunk[i];
+
+                valuesList.Add($"(@p{parameters.Count}, @p{parameters.Count + 1}, @p{parameters.Count + 2})");
+                parameters.Add(new NpgsqlParameter($"p{parameters.Count}", e.Id));
+                parameters.Add(new NpgsqlParameter($"p{parameters.Count + 1}", e.RemainingQuantity));
+                parameters.Add(new NpgsqlParameter($"p{parameters.Count + 2}", e.ExtraBuyoutMoney));
+
+                if (e.ExtraBuyoutMoney > 0) 
+                    hasExtraMoney = true;
             }
 
-            await aucyDb.Database.ExecuteSqlRawAsync($@"
-            UPDATE ""Bids""
-            SET ""Money"" = ""Money"" +
-                    (CASE {caseMoney} ELSE 0 END)
-            WHERE ""Id"" = ANY(@inventoryIds)",
-                new NpgsqlParameter("inventoryIds", inventoryIds));
+            if (hasExtraMoney)
+            {
+                // Extra money to bidder inventories
+                await aucyDb.Database.ExecuteSqlRawAsync($@"
+                    UPDATE ""Bids"" AS b
+                    SET ""RemainingQuantity"" = v.qty,
+                        ""Money"" = b.""Money"" + v.extra_money
+                    FROM (VALUES {string.Join(", ", valuesList)}) AS v(id, qty, extra_money)
+                    WHERE b.""Id"" = v.id",
+                    parameters);
+            }
+            else
+            {
+                var qtyValuesList = new List<string>();
+                var qtyParameters = new List<NpgsqlParameter>();
+
+                for (var i = 0; i < chunk.Length; i++)
+                {
+                    var e = chunk[i];
+                    qtyValuesList.Add($"(@p{qtyParameters.Count}, @p{qtyParameters.Count + 1})");
+                    qtyParameters.Add(new NpgsqlParameter($"p{qtyParameters.Count}", e.Id));
+                    qtyParameters.Add(new NpgsqlParameter($"p{qtyParameters.Count + 1}", e.RemainingQuantity));
+                }
+
+                await aucyDb.Database.ExecuteSqlRawAsync($@"
+                    UPDATE ""Bids"" AS b
+                    SET ""RemainingQuantity"" = v.qty
+                    FROM (VALUES {string.Join(", ", qtyValuesList)}) AS v(id, qty)
+                    WHERE b.""Id"" = v.id",
+                    qtyParameters);
+            }
         }
     }
 
