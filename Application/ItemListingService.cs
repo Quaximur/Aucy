@@ -47,7 +47,7 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
         {
             // Client side cancellation
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             throw new RpcException(new Status(StatusCode.Internal, $"Listing stream has been interrupted: {ex.Message}"));
         }

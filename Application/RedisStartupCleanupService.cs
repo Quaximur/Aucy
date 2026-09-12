@@ -9,6 +9,7 @@ public class RedisStartupCleanupService(
 {
     private readonly IDatabase _db = redis.GetDatabase();
     private readonly IServer _server = redis.GetServers().First(s => s.IsConnected);
+    private readonly ILogger<RedisStartupCleanupService> _logger = logger;
 
     public async Task InitCleanupAsync(CancellationToken cancellationToken)
     {
@@ -35,7 +36,7 @@ public class RedisStartupCleanupService(
         foreach (var pattern in patterns)
         {
             var deleted = await DeleteByPatternAsync(pattern);
-            logger.LogInformation("Cleared {Count} stale lock keys matching '{Pattern}'", deleted, pattern);
+            _logger.LogInformation("Cleared {Count} stale lock keys matching '{Pattern}'", deleted, pattern);
         }
     }
 

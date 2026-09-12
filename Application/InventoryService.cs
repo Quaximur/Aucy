@@ -16,6 +16,7 @@ using Npgsql;
 using Polly;
 using Polly.Retry;
 using System.Data;
+using Microsoft.Extensions.Logging;
 
 namespace Aucy.Application;
 
@@ -24,7 +25,8 @@ public class InventoryService(
     InventoryPropertiesHelper inventoryPropertiesService,
     ItemsHelper itemsService,
     IDbContextFactory<AucyDbContext> aucyDbFactory,
-    IMapper mapper) : ServiceBase<IInventoryService>,
+    IMapper mapper,
+    ILogger<InventoryService> logger) : ServiceBase<IInventoryService>,
 #pragma warning disable CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
     IInventoryService
 #pragma warning restore CS8644 // Type does not implement interface member. Nullability of reference types in interface implemented by the base type doesn't match.
@@ -34,6 +36,7 @@ public class InventoryService(
     private readonly InventoryPropertiesHelper _inventoryProperties = inventoryPropertiesService;
     private readonly ItemsHelper _itemsService = itemsService;
     private readonly IMapper _mapper = mapper;
+    private readonly ILogger<InventoryService> _logger = logger;
 
     public async UnaryResult<Nil> AddItemStack(AddItemStackDto request)
     {
@@ -75,14 +78,14 @@ public class InventoryService(
                     aucyDb.ItemConfigs.Add(itemConfig);
                     await aucyDb.SaveChangesAsync(); // save instantly to use for ItemStack update
 
-                    Console.WriteLine($"ItemConfig not found, created new one: {itemConfig.Id}, {itemConfig.Name}");
+                    _logger.LogInformation("ItemConfig not found, created new one: {ItemConfigId}, {ItemConfigName}", itemConfig.Id, itemConfig.Name);
                 }
                 else
                 {
                     if (itemConfig.IsUnary && request.Quantity != 1)
                         throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, "Quantity must be 1 for unary items"));
 
-                    Console.WriteLine($"ItemConfig found: {itemConfig.Id}, {itemConfig.Name}");
+                    _logger.LogInformation("ItemConfig found: {ItemConfigId}, {ItemConfigName}", itemConfig.Id, itemConfig.Name);
                 }
 
                 // x > z - y <=> x + y > z (no overflow)
