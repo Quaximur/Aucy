@@ -8,6 +8,7 @@ using Grpc.Core;
 using MagicOnion;
 using Medallion.Threading;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using System.Data;
@@ -21,7 +22,8 @@ public class OrderBookHelper(
     IMapper mapper,
     IDistributedReaderWriterLockProvider rwLockProvider,
     IDistributedLockProvider lockProvider,
-    IPriceTierQuantizer quantizer) : IOrderBookHelper
+    IPriceTierQuantizer quantizer,
+    ILogger<OrderBookHelper> logger) : IOrderBookHelper
 {
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
     private readonly InventoryPropertiesHelper _inventoryProperties = inventoryPropertiesService;
@@ -30,11 +32,10 @@ public class OrderBookHelper(
     private readonly IDistributedLockProvider _lockProvider = lockProvider;
     private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
     private readonly IPriceTierQuantizer _quantizer = quantizer;
+    private readonly ILogger<OrderBookHelper> _logger = logger;
 
     public async UnaryResult<LotCreatedDto> CreateLot(Guid userId, CreateLotDto request)
     {
-        Console.WriteLine($"Creating lot request for user: {userId}");
-
         if (request.UnitPrice <= 0)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Unit price should be greater than 0"));
 
@@ -138,7 +139,7 @@ public class OrderBookHelper(
             await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            Console.WriteLine($"Created lot: {lot.Id} for user: {userId} with itemConfig: {itemConfigId}");
+            _logger.LogInformation("Created lot {LotId} for user {UserId} with itemConfig {ItemConfigId}", lot.Id, userId, itemConfigId);
 
             return new LotCreatedDto(lotId: lot.Id,
                 itemConfigId: itemConfigId,
@@ -218,6 +219,8 @@ public class OrderBookHelper(
 
             await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
+
+            _logger.LogInformation("Created lot {LotId} for user {UserId} with itemConfig {ItemConfigId}", lot.Id, userId, itemConfigId);
 
             return new LotCreatedDto(lotId: lot.Id,
                 itemConfigId: itemConfigId,
@@ -354,6 +357,8 @@ public class OrderBookHelper(
 
                 await transaction.CommitAsync();
 
+                _logger.LogInformation("Removed lot {LotId} for user {UserId} with itemConfig {ItemConfigId}", lotFields.Id, userId, lotFields.ItemConfigId);
+
                 return new LotRemovedDto(lotId: request.LotId,
                     itemConfigId: lotFields.ItemConfigId,
                     itemConfig: itemConfigDto.IsUnary ? itemConfigDto : null,  // Send Unary. NonUnary item config is stored on the client 
@@ -472,6 +477,9 @@ public class OrderBookHelper(
 
                 await transaction.CommitAsync();
 
+                _logger.LogInformation("Collected {CollectedMoney} money from {Quantity} items of lot {LotId} for user {UserId} with itemConfig {ItemConfigId}",
+                    returningMoney, takeQuantity, lotFields.Id, userId, lotFields.ItemConfigId);
+
                 return new LotCollectedDto(lotId: lotFields.Id,
                     returningMoney: returningMoney,
                     collectedQuantity: takeQuantity);
@@ -579,6 +587,9 @@ public class OrderBookHelper(
             await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
+            _logger.LogInformation("Created bid {BidId} for user {UserId} with itemConfig {ItemConfigId}",
+                   bid.Id, userId, itemConfigId);
+
             return new BidCreatedDto(bidId: bid.Id,
                 itemConfigId: itemConfigId,
                 itemConfig: null,  // NonUnary item config is stored on the client
@@ -665,6 +676,9 @@ public class OrderBookHelper(
 
             await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
+
+            _logger.LogInformation("Created bid {BidId} for user {UserId} with itemConfig {ItemConfigId}",
+                   bid.Id, userId, itemConfigId);
 
             return new BidCreatedDto(bidId: bid.Id,
                 itemConfigId: itemConfigId,
@@ -783,6 +797,9 @@ public class OrderBookHelper(
                 // Bought items remain in bids. They will be collected by user manually.
 
                 await transaction.CommitAsync();
+
+                _logger.LogInformation("Removed bid {BidId} for user {UserId} with itemConfig {ItemConfigId}",
+                   bidFields.Id, userId, bidFields.ItemConfigId);
 
                 return new BidRemovedDto(bidId: bidFields.Id,
                     returningMoney: returningMoney,
@@ -910,6 +927,9 @@ public class OrderBookHelper(
                 await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
 
                 await transaction.CommitAsync();
+
+                _logger.LogInformation("Collected {Quantity} bought items from bid {BidId} by user {UserId} with itemConfig {ItemConfigId}",
+                   takeQuantity, bidFields.Id, userId, bidFields.ItemConfigId);
 
                 return new BidCollectedDto(bidId: bidFields.Id,
                     itemConfigId: bidFields.ItemConfigId,
