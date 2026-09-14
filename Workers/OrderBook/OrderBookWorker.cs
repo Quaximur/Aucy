@@ -1,5 +1,4 @@
 ﻿using Aucy.Application;
-using Aucy.Application.Helpers;
 using Aucy.Data;
 using Medallion.Threading;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +9,6 @@ namespace Aucy.Workers.OrderBook;
 
 public sealed partial class OrderBookWorker(
     IDbContextFactory<AucyDbContext> aucyDbFactory,
-    IServiceScopeFactory scopeFactory,
     IDistributedReaderWriterLockProvider rwLockProvider,
     ILogger<OrderBookWorker> logger,
     WorkerGroupNotifier groupNotifier
@@ -57,7 +55,6 @@ public sealed partial class OrderBookWorker(
     }
 
     private readonly IDbContextFactory<AucyDbContext> _aucyDbFactory = aucyDbFactory;
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
     private readonly IDistributedReaderWriterLockProvider _rwLockProvider = rwLockProvider;
     private readonly ILogger<OrderBookWorker> _logger = logger;
     private readonly WorkerGroupNotifier _groupNotifier = groupNotifier;
@@ -75,16 +72,12 @@ public sealed partial class OrderBookWorker(
 
     private async Task ProcessMatchingTickAsyncV3(Guid itemConfigId)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-
-        var inventoryProperties = scope.ServiceProvider.GetRequiredService<InventoryPropertiesHelper>();
-
         // Orders deletion/creation lock
         // + await existing deletion/creation operations lock from user requests
         // bid/lot processed values collecting is unlocked
         using var matchingLock = await _rwLockProvider.AcquireWriteLockAsync(Keys.GetItemMatchingLock(itemConfigId));
 
-        using var aucyDb = scope.ServiceProvider.GetRequiredService<AucyDbContext>();
+        using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync();
 
@@ -237,7 +230,7 @@ public sealed partial class OrderBookWorker(
             // TODO: IN FUTURE: leave locked only (minLotPrice, maxBidPrice) orders. Unlock others
             // if lot is created after bid with higher price in one tick, then add difference to Lot.ExtraSoldoutMoney of the seller
             // if bid is created after lot with lower price in one tick, then add difference to Inventory.Money of the bidder 
-            await MatchOrdersAsyncV3(aucyDb, inventoryProperties, activeLots, activeBids, itemConfigId, workerEvents);
+            await MatchOrdersAsyncV3(aucyDb, activeLots, activeBids, itemConfigId, workerEvents);
 
             await transaction.CommitAsync();
 
@@ -280,7 +273,6 @@ public sealed partial class OrderBookWorker(
     }
 
     private async Task MatchOrdersAsyncV3(AucyDbContext aucyDb,
-        InventoryPropertiesHelper inventoryProperties,
         List<LotRow> lots,
         List<BidRow> bids,
         Guid itemConfigId,
