@@ -1,15 +1,42 @@
 using Aucy.Data;
 using Aucy.Domain.Entities;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace Aucy.Tests.Integration;
 
 public static class TradingSimulationSeeder
 {
-    public static async Task<IReadOnlyList<ItemConfig>> SeedAsync(
+    public static async Task<IReadOnlyList<ItemConfig>> SeedWithEmptyInventoriesAsync(
+        AucyDbContext db,
+        IReadOnlyList<TradingSimulationUser> users,
+        int randomSeed = 17537)
+    {
+        var itemConfigs = CreateSimulationItemConfigs();
+
+        db.ItemConfigs.AddRange(itemConfigs);
+
+        var inventories = new List<Inventory>(users.Count);
+
+        foreach (var user in users)
+        {
+            inventories.Add(new Inventory
+            {
+                Id = user.UserId,
+                Money = 0,
+                Capacity = 1000,
+                UsedCapacity = 0,
+                WeightLimit = 1_000_000,
+                UsedWeight = 0
+            });
+        }
+
+        db.Inventories.AddRange(inventories);
+
+        await db.SaveChangesAsync();
+
+        return itemConfigs;
+    }
+
+    public static async Task<IReadOnlyList<ItemConfig>> SeedWithRandomInventoriesAsync(
         AucyDbContext db,
         IReadOnlyList<TradingSimulationUser> users,
         int randomSeed = 17537)

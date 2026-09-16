@@ -5,10 +5,14 @@ using Aucy.Contracts.OnionClient;
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using Aucy.Workers.OrderBook;
+using MagicOnion;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
+using Serilog.Events;
+using StackExchange.Redis;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using Xunit;
@@ -40,14 +44,29 @@ public sealed class TradingBackendFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("ConnectionStrings__AucyDbContext_Postgres", _postgres.GetConnectionString());
         Environment.SetEnvironmentVariable("ConnectionStrings__Redis", _redis.GetConnectionString());
 
-        Users = await TradingSimulationConfig.LoadUsersAsync();
+        var users = new List<TradingSimulationUser>();
+        for (var i = 0; i < 10000; i++)
+        {
+            var iString = i.ToString();
+            users.Add(new TradingSimulationUser(UserId: Guid.NewGuid(), Name: iString, Password: iString));
+        }
+
+        Users = users;
 
         var builder = Host.CreateApplicationBuilder();
 
         builder.AddDataServices();
 
-        builder.Services.AddLogging();
-        builder.Services.AddSingleton<RedisStartupCleanupService>();
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+            .WriteTo.Console()
+            .CreateLogger();
+
+        builder.Services.AddSerilog((services, loggerConfig) => loggerConfig
+           .ReadFrom.Configuration(builder.Configuration)
+           .ReadFrom.Services(services));
+
         builder.Services.AddSingleton<InventoryPropertiesHelper>();
         builder.Services.AddSingleton<ItemsHelper>();
         builder.Services.AddSingleton<IOrderBookHelper, OrderBookHelper>();
@@ -63,9 +82,9 @@ public sealed class TradingBackendFixture : IAsyncLifetime
             throw new NullReferenceException("Redis connection string not found");
 
         builder.Services.AddMagicOnion().UseRedisGroup(options =>
-        {
-            options.ConnectionString = redisConnectionString;
-        }, registerAsDefault: true);
+            {
+                options.ConnectionString = redisConnectionString;
+            }, registerAsDefault: true);
 
         builder.Services.AddAutoMapper(x =>
         {
@@ -81,7 +100,7 @@ public sealed class TradingBackendFixture : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<AucyDbContext>();
 
         await db.Database.MigrateAsync();
-        ItemConfigs = await TradingSimulationSeeder.SeedAsync(db, Users);
+        ItemConfigs = await TradingSimulationSeeder.SeedWithEmptyInventoriesAsync(db, Users);
     }
 
     public async Task DisposeAsync()

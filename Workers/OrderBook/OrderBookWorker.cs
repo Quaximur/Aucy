@@ -60,6 +60,7 @@ public sealed partial class OrderBookWorker(
     private readonly WorkerGroupNotifier _groupNotifier = groupNotifier;
 
     private const int INTERVAL_MS = 1000;
+    private const int BATCH_UPDATE_SIZE = 1000;
 
     public async void RunAsync(Guid itemConfigId)
     {
@@ -392,7 +393,7 @@ public sealed partial class OrderBookWorker(
         }
 
         // Apply changes
-        foreach (var chunk in lots.Take(totalLotEvents).Chunk(200))
+        foreach (var chunk in lots.Take(totalLotEvents).Chunk(BATCH_UPDATE_SIZE))
         {
             var ids = chunk.Select(e => e.Id).ToArray();
 
@@ -422,7 +423,7 @@ public sealed partial class OrderBookWorker(
                 parameters);
         }
 
-        foreach (var chunk in bids.Take(totalBidEvents).Chunk(200))
+        foreach (var chunk in bids.Take(totalBidEvents).Chunk(BATCH_UPDATE_SIZE))
         {
             var qtyValuesList = new List<string>();
             var qtyParameters = new List<NpgsqlParameter>();
@@ -466,8 +467,9 @@ public sealed partial class OrderBookWorker(
                     moneyParameters);
             }
         }
-    }
 
+        _logger.LogInformation("Total matched {MatchedLotsCount} lots with {MatchedBidsCount} bids", totalLotEvents, totalBidEvents);
+    }
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Matched quantity '{MatchQuantity}' of ItemConfig '{ItemConfigId}' from Owner '{OwnerUserId}' to Bidder '{BidderUserId}' for price {ClearingPrice}")]
