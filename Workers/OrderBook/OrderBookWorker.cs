@@ -70,7 +70,7 @@ public sealed partial class OrderBookWorker(
         }
     }
 
-    private async Task ProcessMatchingTickAsyncV3(Guid itemConfigId)
+    public async Task ProcessMatchingTickAsyncV3(Guid itemConfigId)
     {
         // Orders deletion/creation lock
         // + await existing deletion/creation operations lock from user requests
@@ -407,7 +407,7 @@ public sealed partial class OrderBookWorker(
                 var currentParamIndex2 = parameters.Count + 1;
                 var currentParamIndex3 = parameters.Count + 2;
 
-                valuesList.Add($"(@p{currentParamIndex1}, @p{currentParamIndex2}), @p{currentParamIndex3}");
+                valuesList.Add($"(@p{currentParamIndex1}, @p{currentParamIndex2}, @p{currentParamIndex3})");
                 parameters.Add(new NpgsqlParameter($"p{currentParamIndex1}", e.Id));
                 parameters.Add(new NpgsqlParameter($"p{currentParamIndex2}", e.RemainingQuantity));
                 parameters.Add(new NpgsqlParameter($"p{currentParamIndex3}", e.ExtraSoldoutMoney));
