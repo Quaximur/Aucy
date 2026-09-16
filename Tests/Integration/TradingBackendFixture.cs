@@ -45,7 +45,7 @@ public sealed class TradingBackendFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("ConnectionStrings__Redis", _redis.GetConnectionString());
 
         var users = new List<TradingSimulationUser>();
-        for (var i = 0; i < 10000; i++)
+        for (var i = 0; i < 50000; i++)
         {
             var iString = i.ToString();
             users.Add(new TradingSimulationUser(UserId: Guid.NewGuid(), Name: iString, Password: iString));

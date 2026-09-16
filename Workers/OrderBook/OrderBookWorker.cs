@@ -355,12 +355,12 @@ public sealed partial class OrderBookWorker(
             currentBid.RemainingQuantity -= matchQuantity;
             bidEvent.Quantity += matchQuantity;
 
-            LogSaleInformation(logger: _logger,
-                matchQuantity: matchQuantity,
-                itemConfigId: itemConfigId,
-                ownerUserId: currentLot.OwnerUserId,
-                bidderUserId: currentBid.OwnerUserId,
-                clearingPrice: clearingPrice);
+            //LogSaleInformation(logger: _logger,
+            //    matchQuantity: matchQuantity,
+            //    itemConfigId: itemConfigId,
+            //    ownerUserId: currentLot.OwnerUserId,
+            //    bidderUserId: currentBid.OwnerUserId,
+            //    clearingPrice: clearingPrice);
 
             // Move to next order if fully filled
             if (currentLot.RemainingQuantity == 0)

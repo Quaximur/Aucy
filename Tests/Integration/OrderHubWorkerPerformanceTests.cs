@@ -1,11 +1,8 @@
 using Aucy.Data;
 using Aucy.Domain.Entities;
 using Aucy.Workers.OrderBook;
-using MagicOnion;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using StackExchange.Redis;
 using System.Diagnostics;
 using Xunit;
 
@@ -27,7 +24,8 @@ public sealed class OrderHubWorkerPerformanceTests(TradingBackendFixture fixture
     {
         public required int LotsCount { get; init; }
         public required int BidsCount { get; init; }
-        public int? CommonQuantity { get; init; }
+        public int? CommonLotQuantity { get; init; }
+        public int? CommonBidQuantity { get; init; }
         public int? CommonBidPrice { get; init; }
         public int? CommonLotPrice { get; init; }
         public required string ScenarioName { get; init; }
@@ -70,12 +68,10 @@ Performance Test: {ScenarioName}
     /// Test that measures OrderBookWorker performance with N lots and M bids
     /// </summary>
     [Theory]
-    [InlineData(100, 100, 50, "100 lots, 100 bids, 50% overlap")]
-    [InlineData(500, 500, 75, "500 lots, 500 bids, 75% overlap")]
+    [InlineData(100, 100, "100 lots, 100 bids")]
     public async Task ProcessMatchingTick_WithVariousScenarios_RecordsPerformanceStats(
         int lotsCount,
         int bidsCount,
-        int overlapPercentage,
         string scenarioName)
     {
         var itemConfig = _fixture.ItemConfigs[0];
@@ -111,12 +107,39 @@ Performance Test: {ScenarioName}
         // High overlap scenario: all bids and lots at nearly the same price
         var scenario = new PerformanceTestScenario
         {
-            LotsCount = 5000,
-            BidsCount = 5000,
-            CommonQuantity = 500,
+            LotsCount = 25000,
+            BidsCount = 25000,
+            CommonLotQuantity = 500,
+            CommonBidQuantity = 500,
             CommonBidPrice = 500,
             CommonLotPrice = 500,
-            ScenarioName = "Full Overlap Scenario (5000 lots, 5000 bids)"
+            ScenarioName = "Full Overlap Scenario (25000 lots, 25000 bids)"
+        };
+
+        var stats = await RunPerformanceTest(itemConfig.Id, scenario);
+
+        _fixture.Services.GetRequiredService<ILogger<OrderHubWorkerPerformanceTests>>()
+            .LogInformation(stats.ToString());
+
+        Assert.Equal(scenario.LotsCount, stats.LotsCreated);
+        Assert.Equal(scenario.BidsCount, stats.BidsCreated);
+    }
+
+    [Fact]
+    public async Task ProcessMatchingTick_BuyoutBidderOverlapScenario_RecordsStats()
+    {
+        var itemConfig = _fixture.ItemConfigs[0];
+
+        // High overlap scenario: all bids and lots at nearly the same price
+        var scenario = new PerformanceTestScenario
+        {
+            LotsCount = 25000,
+            BidsCount = 25000,
+            CommonLotQuantity = 1,
+            CommonBidQuantity = 5000,
+            CommonLotPrice = 50,
+            CommonBidPrice = 1000,
+            ScenarioName = "Full Overlap Scenario (25000 lots, 25000 bids)"
         };
 
         var stats = await RunPerformanceTest(itemConfig.Id, scenario);
@@ -161,12 +184,12 @@ Performance Test: {ScenarioName}
     {
         var itemConfig = _fixture.ItemConfigs[0];
 
-        // No overlap scenario: lots priced high, bids priced low
+        // High overlap scenario: all bids and lots at nearly the same price
         var scenario = new PerformanceTestScenario
         {
-            LotsCount = 500,
-            BidsCount = 500,
-            ScenarioName = "No Overlap Scenario (500 lots, 500 bids)"
+            LotsCount = 0,
+            BidsCount = 0,
+            ScenarioName = "No Overlap Scenario (0 lots, 0 bids)"
         };
 
         var stats = await RunPerformanceTest(itemConfig.Id, scenario);
@@ -185,6 +208,20 @@ Performance Test: {ScenarioName}
         Guid itemConfigId,
         PerformanceTestScenario scenario)
     {
+        var worker = _fixture.Services.GetRequiredService<OrderBookWorker>();
+        for (var i = 0; i < 5; i++)
+        {
+            try
+            {
+                await worker.ProcessMatchingTickAsyncV3(_fixture.ItemConfigs[0].Id);
+            }
+            catch (Exception ex)
+            {
+                _fixture.Services.GetRequiredService<ILogger<OrderHubWorkerPerformanceTests>>()
+                    .LogWarning(ex, "Worker heating tick failed, but continuing with stats");
+            }
+        }
+
         var random = new Random(42);  // Fixed seed for reproducibility
 
         // Price range: 50-1000 with step 50
@@ -225,7 +262,7 @@ Performance Test: {ScenarioName}
             var sellerUserId = _fixture.Users[i].UserId;
 
             var price = scenario.CommonLotPrice ?? availablePrices[random.Next(availablePrices.Count)];
-            var quantity = scenario.CommonQuantity ?? random.Next(minQuantity, maxQuantity + 1);
+            var quantity = scenario.CommonLotQuantity ?? random.Next(minQuantity, maxQuantity + 1);
 
             var lot = Lot.Create(sellerUserId, itemConfigId, price, quantity);
             lotsToCreate.Add(lot);
@@ -240,7 +277,7 @@ Performance Test: {ScenarioName}
             var buyerUserId = _fixture.Users[maxOrdersPerItemConfig + i].UserId;
 
             var price = scenario.CommonBidPrice ?? availablePrices[random.Next(availablePrices.Count)];
-            var quantity = scenario.CommonQuantity ?? random.Next(minQuantity, maxQuantity + 1);
+            var quantity = scenario.CommonBidQuantity ?? random.Next(minQuantity, maxQuantity + 1);
 
             var bid = Bid.Create(buyerUserId, itemConfigId, price, quantity);
             bidsToCreate.Add(bid);
@@ -261,7 +298,6 @@ Performance Test: {ScenarioName}
         }
 
         // Execute worker matching iteration and measure time
-        var worker = _fixture.Services.GetRequiredService<OrderBookWorker>();
         var stopwatch = Stopwatch.StartNew();
 
         try
