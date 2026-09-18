@@ -44,7 +44,7 @@ try
 
     builder.AddDataServices();
 
-    services.AddSingleton<RedisStartupCleanupService>();
+    services.AddSingleton<RedisStartupCleanup>();
 
     var redisConnectionString =
                Environment.GetEnvironmentVariable("ConnectionStrings__Redis")
@@ -89,7 +89,7 @@ try
     {
         using IServiceScope startupScope = app.Services.CreateScope();
 
-        var cleanup = startupScope.ServiceProvider.GetRequiredService<RedisStartupCleanupService>();
+        var cleanup = startupScope.ServiceProvider.GetRequiredService<RedisStartupCleanup>();
         await cleanup.InitCleanupAsync(CancellationToken.None);
 
         using AucyDbContext ctx = startupScope.ServiceProvider.GetRequiredService<AucyDbContext>();

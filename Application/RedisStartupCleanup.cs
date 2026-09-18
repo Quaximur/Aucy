@@ -3,13 +3,13 @@ using StackExchange.Redis;
 
 namespace Aucy.Application;
 
-public class RedisStartupCleanupService(
+public class RedisStartupCleanup(
     IConnectionMultiplexer redis,
-    ILogger<RedisStartupCleanupService> logger)
+    ILogger<RedisStartupCleanup> logger)
 {
     private readonly IDatabase _db = redis.GetDatabase();
     private readonly IServer _server = redis.GetServers().First(s => s.IsConnected);
-    private readonly ILogger<RedisStartupCleanupService> _logger = logger;
+    private readonly ILogger<RedisStartupCleanup> _logger = logger;
 
     public async Task InitCleanupAsync(CancellationToken cancellationToken)
     {
@@ -30,7 +30,7 @@ public class RedisStartupCleanupService(
             "item_non_unary_user_*",
             "item_unary_user_*",
             "orders_*",
-            "user-conns_*"
+            "user_conns_*"
         ];
 
         foreach (var pattern in patterns)
