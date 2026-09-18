@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using System.Net;
-
 /// Configuration:
 /// 1 <= maxSellQuantity <= 5000
 /// 1 <= maxBuyQuantity <= 5000
