@@ -25,4 +25,10 @@
     <ProjectReference Include="..\Data\Aucy.Data.csproj" />
     <ProjectReference Include="..\Domain\Aucy.Domain.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+	  <None Update="Configs\default-items.json">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+  </ItemGroup>
 </Project>
