@@ -79,9 +79,6 @@ public class OrderHub(WorkerGroupService workerGroupService,
 
     protected override async ValueTask OnDisconnected()
     {
-        if (_room != null)
-            await _room.RemoveAsync(Context);
-
         await _workerGroupService.RemoveMember(_userId, ConnectionId);
     }
 
