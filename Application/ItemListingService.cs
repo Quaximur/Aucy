@@ -31,7 +31,7 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
             var cfg = await _aucyDb.ItemConfigs
                 .Where(x => x.Id == itemConfigId)
                 .Select(x => new { x.MinPrice, x.MaxPrice, x.PriceTierCount })
-                .FirstOrDefaultAsync()
+                .FirstOrDefaultAsync(cancellationToken)
                     ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
 
             while (!cancellationToken.IsCancellationRequested)
