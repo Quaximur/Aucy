@@ -1,6 +1,6 @@
 ﻿namespace Aucy.Application;
 
-public static class Keys
+public static class LockKeys
 {
     /// <summary>
     /// Queue with worker. NonUnary only

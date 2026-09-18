@@ -76,7 +76,7 @@ public sealed partial class OrderBookWorker(
         // Orders deletion/creation lock
         // + await existing deletion/creation operations lock from user requests
         // bid/lot processed values collecting is unlocked
-        using var matchingLock = await _rwLockProvider.AcquireWriteLockAsync(Keys.GetItemMatchingLock(itemConfigId));
+        using var matchingLock = await _rwLockProvider.AcquireWriteLockAsync(LockKeys.GetItemMatchingLock(itemConfigId));
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 

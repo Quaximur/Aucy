@@ -81,10 +81,10 @@ public class OrderBookHelper(
     {
         var itemConfigId = request.ItemConfigId;
 
-        using var userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigId, userId))
+        using var userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetNonUnaryUserLock(itemConfigId, userId))
             ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Some of your operations with this item is already processing"));
 
-        using var rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigId));
+        using var rwLock = await _rwLockProvider.AcquireReadLockAsync(LockKeys.GetItemMatchingLock(itemConfigId));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -179,11 +179,11 @@ public class OrderBookHelper(
         if (!hasItem)
             throw new NoRetryRpcException(new Status(StatusCode.PermissionDenied, "You have no specified item in inventory"));
 
-        using var userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryUserLock(itemConfigId, userId))
+        using var userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryUserLock(itemConfigId, userId))
             ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Some of your operations with this item is already processing"));
 
         // throw because only one user can sell it`s Unary item
-        using var unaryLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryLock(itemConfigId))
+        using var unaryLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryLock(itemConfigId))
             ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Failed to acquire user lock"));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync();
@@ -282,12 +282,12 @@ public class OrderBookHelper(
 
             if (!itemConfigDto.IsUnary)
             {
-                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigDto.Id, userId))
+                userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetNonUnaryUserLock(itemConfigDto.Id, userId))
                     ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
                         "Some of your operations with this item is already processing"));
 
                 // wait for matching worker if not unary
-                rwItemLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigDto.Id));
+                rwItemLock = await _rwLockProvider.AcquireReadLockAsync(LockKeys.GetItemMatchingLock(itemConfigDto.Id));
             }
             else
             {
@@ -296,11 +296,11 @@ public class OrderBookHelper(
                 if (!isOwnLot)
                     throw new NoRetryRpcException(new Status(StatusCode.PermissionDenied, "You have no permission to modify this lot"));
 
-                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryUserLock(itemConfigDto.Id, userId))
+                userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryUserLock(itemConfigDto.Id, userId))
                     ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
                         "Some of your operations with this item is already processing"));
 
-                unaryLock = await _lockProvider.AcquireLockAsync(Keys.GetUnaryLock(itemConfigDto.Id));
+                unaryLock = await _lockProvider.AcquireLockAsync(LockKeys.GetUnaryLock(itemConfigDto.Id));
             }
 
             var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
@@ -413,8 +413,8 @@ public class OrderBookHelper(
             // No Non-User Unary lock needed 
             // (Concurrent Purchace -> RemainingQuantity decrease -> still correct calculation with quantity diff)
             var userLockKey = itemConfigFields.IsUnary ?
-                    Keys.GetUnaryUserLock(itemConfigFields.ItemConfigId, userId) :
-                    Keys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId);
+                    LockKeys.GetUnaryUserLock(itemConfigFields.ItemConfigId, userId) :
+                    LockKeys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId);
 
             using var userLock = await _lockProvider.TryAcquireLockAsync(userLockKey)
                 ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
@@ -550,11 +550,11 @@ public class OrderBookHelper(
     {
         var itemConfigId = request.ItemConfigId;
 
-        using var userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigId, userId))
+        using var userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetNonUnaryUserLock(itemConfigId, userId))
             ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
                 "Some of your operations with this item is already processing"));
 
-        using var rwLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigId));
+        using var rwLock = await _rwLockProvider.AcquireReadLockAsync(LockKeys.GetItemMatchingLock(itemConfigId));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -624,10 +624,10 @@ public class OrderBookHelper(
 
         var itemConfigId = request.ItemConfigId;
 
-        using var userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryUserLock(itemConfigId, userId))
+        using var userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryUserLock(itemConfigId, userId))
             ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, "Some of your operations with this item is already processing"));
 
-        using var unaryLock = await _lockProvider.AcquireLockAsync(Keys.GetUnaryLock(itemConfigId));
+        using var unaryLock = await _lockProvider.AcquireLockAsync(LockKeys.GetUnaryLock(itemConfigId));
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -732,20 +732,20 @@ public class OrderBookHelper(
 
             if (!itemConfigFields.IsUnary)
             {
-                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId))
+                userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId))
                     ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
                         "Some of your operations with this item is already processing"));
 
                 // wait for matching worker if not unary
-                rwItemLock = await _rwLockProvider.AcquireReadLockAsync(Keys.GetItemMatchingLock(itemConfigFields.ItemConfigId));
+                rwItemLock = await _rwLockProvider.AcquireReadLockAsync(LockKeys.GetItemMatchingLock(itemConfigFields.ItemConfigId));
             }
             else
             {
-                userLock = await _lockProvider.TryAcquireLockAsync(Keys.GetUnaryUserLock(itemConfigFields.ItemConfigId, userId))
+                userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryUserLock(itemConfigFields.ItemConfigId, userId))
                     ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
                         "Some of your operations with this item is already processing"));
 
-                unaryLock = await _lockProvider.AcquireLockAsync(Keys.GetUnaryLock(itemConfigFields.ItemConfigId));
+                unaryLock = await _lockProvider.AcquireLockAsync(LockKeys.GetUnaryLock(itemConfigFields.ItemConfigId));
             }
 
             var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
@@ -854,8 +854,8 @@ public class OrderBookHelper(
             // No Non-User Unary lock needed 
             // (Concurrent Sale -> RemainingQuantity decrease -> still correct calculation with quantity diff)
             var userLockKey = itemConfigDto.IsUnary ?
-                    Keys.GetUnaryUserLock(itemConfigDto.Id, userId) :
-                    Keys.GetNonUnaryUserLock(itemConfigDto.Id, userId);
+                    LockKeys.GetUnaryUserLock(itemConfigDto.Id, userId) :
+                    LockKeys.GetNonUnaryUserLock(itemConfigDto.Id, userId);
 
             using var userLock = await _lockProvider.TryAcquireLockAsync(userLockKey)
                 ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
