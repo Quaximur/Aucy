@@ -1,4 +1,5 @@
 ﻿using Aucy.Contracts.OnionClient;
+using Aucy.Application.Constants;
 using Aucy.Data;
 using Grpc.Core;
 using MagicOnion;
@@ -32,7 +33,7 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
                 .Where(x => x.Id == itemConfigId)
                 .Select(x => new { x.MinPrice, x.MaxPrice, x.PriceTierCount })
                 .FirstOrDefaultAsync(cancellationToken)
-                    ?? throw new RpcException(new Status(StatusCode.NotFound, "Item config doesn`t exist"));
+                    ?? throw new RpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.ITEM_CONFIG_NOT_FOUND));
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -47,9 +48,9 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
         {
             // Client side cancellation
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            throw new RpcException(new Status(StatusCode.Internal, $"Listing stream has been interrupted: {ex.Message}"));
+            throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.LISTING_STREAM_INTERRUPTED));
         }
 
         return stream.Result();

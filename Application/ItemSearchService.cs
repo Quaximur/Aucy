@@ -1,4 +1,5 @@
 ﻿using Aucy.Contracts.OnionClient;
+using Aucy.Application.Constants;
 using Aucy.Data;
 using AutoMapper;
 using Microsoft.Extensions.Logging;
@@ -25,10 +26,10 @@ public class ItemSearchService(AucyDbContext aucyDbContext,
     public async UnaryResult<ItemConfigsDto> GetItemConfigs(GetItemConfigsDto request)
     {
         if (request.Page <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Page number should be greater than 0"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PAGE_NUMBER));
 
         if (request.PageSize <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Page size should be greater than 0"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PAGE_SIZE));
 
         var query = _aucyDb.ItemConfigs.AsQueryable();
 

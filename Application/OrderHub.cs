@@ -1,4 +1,5 @@
 ﻿using Aucy.Application.Helpers;
+using Aucy.Application.Constants;
 using Aucy.Contracts.OnionClient;
 using Aucy.Data;
 using AutoMapper;
@@ -58,7 +59,7 @@ public class OrderHub(WorkerGroupService workerGroupService,
                     usedWeight: x.UsedWeight
                 ))
                 .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
-                    "Inventory doesn't exist"));
+                    AuctionErrorCodes.INVENTORY_NOT_FOUND));
 
         var lotsWithItemConfigs = await aucyDb.Lots
            .Where(l => l.OwnerUserId == _userId)
