@@ -912,10 +912,14 @@ public class OrderBookHelper(
                 {
                     bidsUpdated = await aucyDb.Bids
                         .Where(b => b.Id == request.BidId && b.BidderUserId == userId)
+                        //b.TotalQuantity > takeQuantity && // Total quantity won`t reduce to 0
+                        //b.TotalQuantity - b.RemainingQuantity >= takeQuantity // Collect no more than it has
                         .ExecuteUpdateAsync(x =>
                         {
                             x.SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
                         });
+
+                    
                 }
                 else
                 {
