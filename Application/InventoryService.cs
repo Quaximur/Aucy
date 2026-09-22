@@ -44,10 +44,10 @@ public class InventoryService(
         var userId = Context.GetUserId();
 
         if (request.Quantity <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY);
 
         if (request.ItemConfig != null && request.ItemConfig.IsUnary && request.Quantity != 1)
-            throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY_FOR_UNARY_ITEM));
+            throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY_FOR_UNARY_ITEM);
 
         var itemConfigId = request.ItemConfigId;
 
@@ -62,8 +62,8 @@ public class InventoryService(
                 var inventoryFields = await aucyDb.Inventories
                     .Where(x => x.Id == userId)
                     .Select(x => new { x.Id, x.Capacity, x.UsedCapacity, x.WeightLimit, x.UsedWeight })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
-                        AuctionErrorCodes.INVENTORY_NOT_FOUND));
+                    .FirstOrDefaultAsync() ?? throw new NoRetryReturnStatusException(StatusCode.NotFound,
+                        AuctionErrorCodes.INVENTORY_NOT_FOUND);
 
                 // Find or create the ItemConfig
                 // Mostly used for Unary items
@@ -72,26 +72,30 @@ public class InventoryService(
                 if (itemConfig == null)
                 {
                     if (request.ItemConfig == null)
-                        throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_ITEM_CONFIG));
+                        throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_ITEM_CONFIG);
 
                     itemConfig = _mapper.Map<ItemConfig>(request.ItemConfig);
 
                     aucyDb.ItemConfigs.Add(itemConfig);
                     await aucyDb.SaveChangesAsync(); // save instantly to use for ItemStack update
 
-                    _logger.LogInformation("ItemConfig not found, created new one: {ItemConfigId}, {ItemConfigName}", itemConfig.Id, itemConfig.Name);
+                    _logger.LogInformation("ItemConfig not found, created new one: {ItemConfigId}, {ItemConfigName}", 
+                        itemConfig.Id, itemConfig.Name);
                 }
                 else
                 {
                     if (itemConfig.IsUnary && request.Quantity != 1)
-                        throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY_FOR_UNARY_ITEM));
+                        throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, 
+                            AuctionErrorCodes.INVALID_QUANTITY_FOR_UNARY_ITEM);
 
-                    _logger.LogInformation("ItemConfig found: {ItemConfigId}, {ItemConfigName}", itemConfig.Id, itemConfig.Name);
+                    _logger.LogInformation("ItemConfig found: {ItemConfigId}, {ItemConfigName}", 
+                        itemConfig.Id, itemConfig.Name);
                 }
 
                 // x > z - y <=> x + y > z (no overflow)
                 if (inventoryFields.UsedCapacity > inventoryFields.Capacity - 1)
-                    throw new NoRetryRpcException(new Status(StatusCode.ResourceExhausted, AuctionErrorCodes.INVENTORY_CAPACITY_EXCEEDED));
+                    throw new NoRetryReturnStatusException(StatusCode.ResourceExhausted, 
+                        AuctionErrorCodes.INVENTORY_CAPACITY_EXCEEDED);
 
                 float usedWeightDiff = 0;
 
@@ -101,7 +105,8 @@ public class InventoryService(
 
                     // x > z - y <=> x + y > z (no overflow)
                     if (inventoryFields.UsedWeight > inventoryFields.WeightLimit - usedWeightDiff)
-                        throw new NoRetryRpcException(new Status(StatusCode.ResourceExhausted, AuctionErrorCodes.INVENTORY_WEIGHT_LIMIT_EXCEEDED));
+                        throw new NoRetryReturnStatusException(StatusCode.ResourceExhausted, 
+                            AuctionErrorCodes.INVENTORY_WEIGHT_LIMIT_EXCEEDED);
                 }
 
                 // Try to update an existing ItemStack with the same ConfigId or create new one if not found
@@ -114,7 +119,7 @@ public class InventoryService(
 
                 return Nil.Default;
             }
-            catch (RpcException)
+            catch (ReturnStatusException)
             {
                 await transaction.RollbackAsync();
                 throw;
@@ -122,12 +127,12 @@ public class InventoryService(
             catch (OverflowException)
             {
                 await transaction.RollbackAsync();
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE);
             }
             catch (Exception)
             {
                 await transaction.RollbackAsync();
-                throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_ADD_ITEM_STACK));
+                throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_ADD_ITEM_STACK);
             }
         });
     }
@@ -144,13 +149,13 @@ public class InventoryService(
 
             return Nil.Default;
         }
-        catch (RpcException)
+        catch (ReturnStatusException)
         {
             throw;
         }
         catch (Exception)
         {
-            throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_ADD_MONEY));
+            throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_ADD_MONEY);
         }
     }
 
@@ -166,13 +171,13 @@ public class InventoryService(
 
             return Nil.Default;
         }
-        catch (RpcException)
+        catch (ReturnStatusException)
         {
             throw;
         }
         catch (Exception)
         {
-            throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_TAKE_MONEY));
+            throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_TAKE_MONEY);
         }
     }
 
@@ -210,12 +215,12 @@ public class InventoryService(
             catch (DbUpdateException ex) 
                 when (ex.InnerException is PostgresException sqlEx && (sqlEx.SqlState == PostgresErrorCodes.UniqueViolation))
             {
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVENTORY_ALREADY_EXISTS));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVENTORY_ALREADY_EXISTS);
             }
             catch (Exception)
             {
-                throw new RpcException(new Status(StatusCode.Internal,
-                    AuctionErrorCodes.FAILED_TO_CREATE_INVENTORY));
+                throw new ReturnStatusException(StatusCode.Internal,
+                    AuctionErrorCodes.FAILED_TO_CREATE_INVENTORY);
             }
         });
     }
@@ -239,8 +244,8 @@ public class InventoryService(
                 var itemStackFields = await aucyDb.ItemStacks
                     .Where(i => i.Id == request.ItemStackId && i.InventoryId == userId && i.Quantity >= request.Quantity)
                     .Select(x => new { x.Id, x.Quantity, ConfigWeight = x.Config.Weight })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
-                        AuctionErrorCodes.ITEM_STACK_NOT_FOUND));
+                    .FirstOrDefaultAsync() ?? throw new NoRetryReturnStatusException(StatusCode.NotFound,
+                        AuctionErrorCodes.ITEM_STACK_NOT_FOUND);
 
                 var itemStackId = itemStackFields.Id;
                 int usedCapacityDiff = 0;
@@ -261,7 +266,7 @@ public class InventoryService(
                 }
 
                 if (updatedItemStacks != 1)
-                    throw new NoRetryRpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.ITEM_STACK_NOT_FOUND));
+                    throw new NoRetryReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.ITEM_STACK_NOT_FOUND);
 
                 float usedWeightDiff = 0;
                 if (itemStackFields.ConfigWeight > 0)
@@ -273,7 +278,7 @@ public class InventoryService(
 
                 return Nil.Default;
             }
-            catch (RpcException)
+            catch (ReturnStatusException)
             {
                 await transaction.RollbackAsync();
                 throw;
@@ -281,8 +286,8 @@ public class InventoryService(
             catch (Exception)
             {
                 await transaction.RollbackAsync();
-                throw new RpcException(new Status(StatusCode.Internal,
-                    AuctionErrorCodes.FAILED_TO_REMOVE_ITEMSTACK));
+                throw new ReturnStatusException(StatusCode.Internal,
+                    AuctionErrorCodes.FAILED_TO_REMOVE_ITEMSTACK);
             }
         });
     }
@@ -290,7 +295,7 @@ public class InventoryService(
     private AsyncRetryPolicy GetRetryPolicy()
     {
         return Policy
-            .Handle<Exception>(ex => ex is not NoRetryRpcException)
+            .Handle<Exception>(ex => ex is not NoRetryReturnStatusException)
             .RetryAsync(3);
     }
 }

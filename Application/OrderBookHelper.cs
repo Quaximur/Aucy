@@ -38,10 +38,10 @@ public class OrderBookHelper(
     public async UnaryResult<LotCreatedDto> CreateLot(Guid userId, CreateLotDto request)
     {
         if (request.UnitPrice <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_UNIT_PRICE));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_UNIT_PRICE);
 
         if (request.TotalQuantity <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_TOTAL_QUANTITY));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_TOTAL_QUANTITY);
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
@@ -49,21 +49,21 @@ public class OrderBookHelper(
             .Where(x => x.Id == request.ItemConfigId)
             .Select(x => _mapper.Map<ItemConfigDto>(x))
             .FirstOrDefaultAsync()
-                    ?? throw new RpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.ITEM_CONFIG_NOT_FOUND));
+                    ?? throw new ReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.ITEM_CONFIG_NOT_FOUND);
 
         if (request.UnitPrice < itemConfigDto.MinPrice || request.UnitPrice > itemConfigDto.MaxPrice)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PRICE_RANGE));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PRICE_RANGE);
 
         // Validate that provided price matches one of configured price tiers
-        if (!_quantizer.IsPriceValid(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, 
+        if (!_quantizer.IsPriceValid(itemConfigDto.MinPrice, itemConfigDto.MaxPrice,
             itemConfigDto.PriceTierCount, request.UnitPrice))
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument,
-                AuctionErrorCodes.INVALID_PRICE_TIER));
+            throw new ReturnStatusException(StatusCode.InvalidArgument,
+                AuctionErrorCodes.INVALID_PRICE_TIER);
         }
 
         if (request.TotalQuantity > itemConfigDto.MaxSellQuantity)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.LOT_QUANTITY_EXCEEDS_MAX));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.LOT_QUANTITY_EXCEEDS_MAX);
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
@@ -86,8 +86,8 @@ public class OrderBookHelper(
         var itemConfigId = request.ItemConfigId;
 
         using var userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetNonUnaryUserLock(itemConfigId, userId))
-            ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, 
-                AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+            ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
         using var rwLock = await _rwLockProvider.AcquireReadLockAsync(LockKeys.GetItemMatchingLock(itemConfigId));
 
@@ -100,15 +100,15 @@ public class OrderBookHelper(
                     l.ItemConfigId == itemConfigId);
 
             if (ownBidExists)
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                    AuctionErrorCodes.CANNOT_CREATE_LOT_WHILE_BUYING));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                    AuctionErrorCodes.CANNOT_CREATE_LOT_WHILE_BUYING);
 
             var lotExists = await aucyDb.Lots.AnyAsync(l =>
                 l.OwnerUserId == userId &&
                 l.ItemConfigId == itemConfigId);
 
             if (lotExists)
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.LOT_ALREADY_EXISTS));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.LOT_ALREADY_EXISTS);
 
             // Check items existence and quantity in inventory
             var itemStack = await aucyDb.ItemStacks
@@ -116,11 +116,11 @@ public class OrderBookHelper(
                     s.ConfigId == itemConfigId &&
                     s.Quantity >= request.TotalQuantity)
                 .Select(s => new { s.Id, s.InventoryId, s.ConfigId, s.Quantity })
-                .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument,
-                    AuctionErrorCodes.INSUFFICIENT_INVENTORY));
+                .FirstOrDefaultAsync() ?? throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                    AuctionErrorCodes.INSUFFICIENT_INVENTORY);
 
             // Reduce the quantity or remove the ItemStack
-            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(aucyDb, itemConfigId, 
+            var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(aucyDb, itemConfigId,
                 request.TotalQuantity, userId);
 
             // Alter inventory UsedWeight
@@ -146,7 +146,7 @@ public class OrderBookHelper(
             await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            _logger.LogInformation("Created lot {LotId} for user {UserId} with itemConfig {ItemConfigId}", 
+            _logger.LogInformation("Created lot {LotId} for user {UserId} with itemConfig {ItemConfigId}",
                 lot.Id, userId, itemConfigId);
 
             return new LotCreatedDto(lotId: lot.Id,
@@ -160,9 +160,9 @@ public class OrderBookHelper(
         catch (OverflowException)
         {
             await transaction.RollbackAsync();
-            throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.LOT_PRICE_TOO_LARGE));
+            throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.LOT_PRICE_TOO_LARGE);
         }
-        catch (RpcException)
+        catch (ReturnStatusException)
         {
             await transaction.RollbackAsync();
             throw;
@@ -170,32 +170,32 @@ public class OrderBookHelper(
         catch (Exception)
         {
             await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_CREATE_LOT));
+            throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_CREATE_LOT);
         }
     }
 
-    private async UnaryResult<LotCreatedDto> SellUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb, 
+    private async UnaryResult<LotCreatedDto> SellUnary(Guid userId, CreateLotDto request, AucyDbContext aucyDb,
         ItemConfigDto itemConfigDto)
     {
         if (request.TotalQuantity != 1)
-            throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                AuctionErrorCodes.INVALID_QUANTITY_FOR_UNARY_ITEM));
+            throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                AuctionErrorCodes.INVALID_QUANTITY_FOR_UNARY_ITEM);
 
         var itemConfigId = request.ItemConfigId;
 
         var hasItem = await aucyDb.ItemStacks.AnyAsync(x => x.ConfigId == itemConfigId && x.InventoryId == userId);
 
         if (!hasItem)
-            throw new NoRetryRpcException(new Status(StatusCode.PermissionDenied, AuctionErrorCodes.ITEM_STACK_NOT_FOUND));
+            throw new NoRetryReturnStatusException(StatusCode.PermissionDenied, AuctionErrorCodes.ITEM_STACK_NOT_FOUND);
 
         using var userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryUserLock(itemConfigId, userId))
-            ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, 
-            AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+            ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+            AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
         // throw because only one user can sell it`s Unary item
         using var unaryLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryLock(itemConfigId))
-            ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, 
-                AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+            ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
         using var transaction = await aucyDb.Database.BeginTransactionAsync();
 
@@ -206,8 +206,8 @@ public class OrderBookHelper(
                 l.ItemConfigId == itemConfigId);
 
             if (ownBidExists)
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                    AuctionErrorCodes.CANNOT_CREATE_LOT_WHILE_BUYING));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                    AuctionErrorCodes.CANNOT_CREATE_LOT_WHILE_BUYING);
 
             var usedCapacityDiff = await _itemsService.UpdateOrDeleteItemStack(aucyDb, itemConfigId, 1, userId);
 
@@ -232,7 +232,7 @@ public class OrderBookHelper(
             await aucyDb.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            _logger.LogInformation("Created lot {LotId} for user {UserId} with itemConfig {ItemConfigId}", 
+            _logger.LogInformation("Created lot {LotId} for user {UserId} with itemConfig {ItemConfigId}",
                 lot.Id, userId, itemConfigId);
 
             return new LotCreatedDto(lotId: lot.Id,
@@ -246,9 +246,9 @@ public class OrderBookHelper(
         catch (OverflowException)
         {
             await transaction.RollbackAsync();
-            throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.LOT_PRICE_TOO_LARGE));
+            throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.LOT_PRICE_TOO_LARGE);
         }
-        catch (RpcException)
+        catch (ReturnStatusException)
         {
             await transaction.RollbackAsync();
             throw;
@@ -256,7 +256,7 @@ public class OrderBookHelper(
         catch (Exception)
         {
             await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_CREATE_LOT));
+            throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_CREATE_LOT);
         }
     }
 
@@ -286,7 +286,7 @@ public class OrderBookHelper(
                 .Where(x => x.Id == request.LotId && x.ItemConfig != null)
                 .Select(x => _mapper.Map<ItemConfigDto>(x.ItemConfig))
                 .FirstOrDefaultAsync()
-                    ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.LOT_NOT_FOUND));
+                    ?? throw new NoRetryReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.LOT_NOT_FOUND);
 
             IDistributedSynchronizationHandle? userLock = null;
             IDistributedSynchronizationHandle? rwItemLock = null;
@@ -295,8 +295,8 @@ public class OrderBookHelper(
             if (!itemConfigDto.IsUnary)
             {
                 userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetNonUnaryUserLock(itemConfigDto.Id, userId))
-                    ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
-                        AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+                    ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                        AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
                 // wait for matching worker if not unary
                 rwItemLock = await _rwLockProvider.AcquireReadLockAsync(LockKeys.GetItemMatchingLock(itemConfigDto.Id));
@@ -306,12 +306,12 @@ public class OrderBookHelper(
                 var isOwnLot = await aucyDb.Lots.AnyAsync(x => x.Id == request.LotId && x.OwnerUserId == userId);
 
                 if (!isOwnLot)
-                    throw new NoRetryRpcException(new Status(StatusCode.PermissionDenied, 
-                        AuctionErrorCodes.NO_LOT_MODIFICATION_PERMISSION));
+                    throw new NoRetryReturnStatusException(StatusCode.PermissionDenied,
+                        AuctionErrorCodes.NO_LOT_MODIFICATION_PERMISSION);
 
                 userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryUserLock(itemConfigDto.Id, userId))
-                    ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
-                        AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+                    ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                        AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
                 unaryLock = await _lockProvider.AcquireLockAsync(LockKeys.GetUnaryLock(itemConfigDto.Id));
             }
@@ -330,8 +330,8 @@ public class OrderBookHelper(
                         b.TotalQuantity,
                         b.RemainingQuantity,
                     })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
-                        AuctionErrorCodes.NOTHING_TO_REMOVE_LOT));
+                    .FirstOrDefaultAsync() ?? throw new NoRetryReturnStatusException(StatusCode.NotFound,
+                        AuctionErrorCodes.NOTHING_TO_REMOVE_LOT);
 
                 int lotsUpdated = 0;
                 var quantityToRemove = lotFields.RemainingQuantity;
@@ -355,7 +355,7 @@ public class OrderBookHelper(
                 }
 
                 if (lotsUpdated != 1)
-                    throw new RpcException(new Status(StatusCode.FailedPrecondition, AuctionErrorCodes.LOT_REMOVING_CONFLICT));
+                    throw new ReturnStatusException(StatusCode.FailedPrecondition, AuctionErrorCodes.LOT_REMOVING_CONFLICT);
 
                 var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(aucyDb, lotFields.ItemConfigId,
                        quantityToRemove, userId);
@@ -381,9 +381,9 @@ public class OrderBookHelper(
             catch (OverflowException)
             {
                 await transaction.RollbackAsync();
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE);
             }
-            catch (RpcException)
+            catch (ReturnStatusException)
             {
                 await transaction.RollbackAsync();
                 throw;
@@ -391,7 +391,7 @@ public class OrderBookHelper(
             catch (Exception)
             {
                 await transaction.RollbackAsync();
-                throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_REMOVE_LOT));
+                throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_REMOVE_LOT);
             }
             finally
             {
@@ -408,7 +408,7 @@ public class OrderBookHelper(
     public async UnaryResult<LotCollectedDto> CollectLot(Guid userId, CollectLotDto request)
     {
         if (request.Quantity <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY);
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
@@ -418,7 +418,7 @@ public class OrderBookHelper(
                 .Where(x => x.Id == request.LotId && x.ItemConfig != null)
                 .Select(x => new { x.ItemConfig.IsUnary, x.ItemConfigId })
                 .FirstOrDefaultAsync()
-                        ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.LOT_NOT_FOUND));
+                        ?? throw new NoRetryReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.LOT_NOT_FOUND);
 
             // No worker lock needed
             // No Non-User Unary lock needed 
@@ -428,8 +428,8 @@ public class OrderBookHelper(
                     LockKeys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId);
 
             using var userLock = await _lockProvider.TryAcquireLockAsync(userLockKey)
-                ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
-                    AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+                ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                    AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
             using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -448,19 +448,19 @@ public class OrderBookHelper(
                         b.UnitPrice,
                         b.ExtraSoldoutMoney
                     })
-                    .FirstOrDefaultAsync() ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, 
-                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_LOT));
+                    .FirstOrDefaultAsync() ?? throw new NoRetryReturnStatusException(StatusCode.NotFound,
+                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_LOT);
 
                 if (lotFields.RemainingQuantity == lotFields.TotalQuantity)
-                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_LOT));
+                    throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_LOT);
 
                 var soldQuantity = lotFields.TotalQuantity - lotFields.RemainingQuantity;
                 var takeQuantity = request.Quantity;
 
                 if (takeQuantity > soldQuantity)
-                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_LOT));
+                    throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_LOT);
 
                 int updatedLots;
 
@@ -482,7 +482,7 @@ public class OrderBookHelper(
                 }
 
                 if (updatedLots != 1)
-                    throw new NoRetryRpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_LOT));
+                    throw new NoRetryReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_LOT);
 
                 var returningMoney = checked(lotFields.UnitPrice * takeQuantity + lotFields.ExtraSoldoutMoney);
                 // TODO: apply commission
@@ -501,9 +501,9 @@ public class OrderBookHelper(
             catch (OverflowException)
             {
                 await transaction.RollbackAsync();
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE);
             }
-            catch (RpcException)
+            catch (ReturnStatusException)
             {
                 await transaction.RollbackAsync();
                 throw;
@@ -511,8 +511,8 @@ public class OrderBookHelper(
             catch (Exception)
             {
                 await transaction.RollbackAsync();
-                throw new RpcException(new Status(StatusCode.Internal,
-                    AuctionErrorCodes.FAILED_TO_COLLECT_LOT));
+                throw new ReturnStatusException(StatusCode.Internal,
+                    AuctionErrorCodes.FAILED_TO_COLLECT_LOT);
             }
             finally
             {
@@ -525,10 +525,12 @@ public class OrderBookHelper(
     public async UnaryResult<BidCreatedDto> CreateBid(Guid userId, CreateBidDto request)
     {
         if (request.BidPrice <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_UNIT_PRICE));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_UNIT_PRICE);
+        if (request.BidPrice <= 0)
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_UNIT_PRICE);
 
         if (request.TotalQuantity <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY);
 
         using var aucyDb = await _aucyDbFactory.CreateDbContextAsync();
 
@@ -536,17 +538,17 @@ public class OrderBookHelper(
                 .Where(x => x.Id == request.ItemConfigId)
                 .Select(x => _mapper.Map<ItemConfigDto>(x))
                 .FirstOrDefaultAsync()
-                     ?? throw new RpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.ITEM_CONFIG_NOT_FOUND));
+                     ?? throw new ReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.ITEM_CONFIG_NOT_FOUND);
 
         if (request.BidPrice < itemConfigDto.MinPrice || request.BidPrice > itemConfigDto.MaxPrice)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PRICE_RANGE));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PRICE_RANGE);
 
         // Validate that provided price matches one of configured price tiers
         if (!_quantizer.IsPriceValid(itemConfigDto.MinPrice, itemConfigDto.MaxPrice, itemConfigDto.PriceTierCount, request.BidPrice))
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PRICE_TIER));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PRICE_TIER);
 
         if (request.TotalQuantity > itemConfigDto.MaxBuyQuantity)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.BID_QUANTITY_EXCEEDS_MAX));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.BID_QUANTITY_EXCEEDS_MAX);
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
@@ -563,8 +565,8 @@ public class OrderBookHelper(
         var itemConfigId = request.ItemConfigId;
 
         using var userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetNonUnaryUserLock(itemConfigId, userId))
-            ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
-                AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+            ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
         using var rwLock = await _rwLockProvider.AcquireReadLockAsync(LockKeys.GetItemMatchingLock(itemConfigId));
 
@@ -577,15 +579,15 @@ public class OrderBookHelper(
                 l.ItemConfigId == itemConfigId);
 
             if (ownLotExists)
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                    AuctionErrorCodes.CANNOT_CREATE_BID_WHILE_SELLING));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                    AuctionErrorCodes.CANNOT_CREATE_BID_WHILE_SELLING);
 
             var bidExists = await aucyDb.Bids.AnyAsync(b =>
                 b.BidderUserId == userId &&
                 b.ItemConfigId == itemConfigId);
 
             if (bidExists)
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.BID_ALREADY_EXISTS));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.BID_ALREADY_EXISTS);
 
             var reservedMoney = checked(request.BidPrice * request.TotalQuantity);
             await _inventoryProperties.WithdrawMoney(aucyDb, userId, reservedMoney);
@@ -614,9 +616,9 @@ public class OrderBookHelper(
         catch (OverflowException)
         {
             await transaction.RollbackAsync();
-            throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.BID_PRICE_TOO_LARGE));
+            throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.BID_PRICE_TOO_LARGE);
         }
-        catch (RpcException)
+        catch (ReturnStatusException)
         {
             await transaction.RollbackAsync();
             throw;
@@ -624,7 +626,7 @@ public class OrderBookHelper(
         catch (Exception)
         {
             await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_CREATE_BID));
+            throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_CREATE_BID);
         }
     }
 
@@ -632,14 +634,14 @@ public class OrderBookHelper(
         ItemConfigDto itemConfigDto)
     {
         if (request.TotalQuantity != 1)
-            throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                AuctionErrorCodes.INVALID_QUANTITY_FOR_UNARY_ITEM));
+            throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                AuctionErrorCodes.INVALID_QUANTITY_FOR_UNARY_ITEM);
 
         var itemConfigId = request.ItemConfigId;
 
         using var userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryUserLock(itemConfigId, userId))
-            ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition, 
-                AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+            ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
         using var unaryLock = await _lockProvider.AcquireLockAsync(LockKeys.GetUnaryLock(itemConfigId));
 
@@ -652,8 +654,8 @@ public class OrderBookHelper(
                     l.ItemConfigId == request.ItemConfigId);
 
             if (ownLotExists)
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                    AuctionErrorCodes.CANNOT_CREATE_BID_WHILE_SELLING));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                    AuctionErrorCodes.CANNOT_CREATE_BID_WHILE_SELLING);
 
             var lotFields = await aucyDb.Lots
                 .Where(l => l.ItemConfigId == request.ItemConfigId && l.RemainingQuantity > 0)
@@ -662,12 +664,12 @@ public class OrderBookHelper(
                     l.Id,
                     l.UnitPrice
                 })
-                .FirstOrDefaultAsync() 
-                    ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.LOT_NOT_FOUND));
+                .FirstOrDefaultAsync()
+                    ?? throw new NoRetryReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.LOT_NOT_FOUND);
 
             if (lotFields.UnitPrice != request.BidPrice)
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument,
-                    AuctionErrorCodes.INVALID_UNARY_BID_PRICE));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                    AuctionErrorCodes.INVALID_UNARY_BID_PRICE);
 
             await _inventoryProperties.WithdrawMoney(aucyDb, userId, lotFields.UnitPrice);
 
@@ -675,7 +677,7 @@ public class OrderBookHelper(
                 .ExecuteUpdateAsync(x => x.SetProperty(x => x.RemainingQuantity, x => x.RemainingQuantity - 1));
 
             if (updatedLots != 1)
-                throw new RpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.LOT_NOT_FOUND));
+                throw new ReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.LOT_NOT_FOUND);
 
             var bid = Bid.Create(
                 bidderUserId: userId,
@@ -702,7 +704,7 @@ public class OrderBookHelper(
                 totalQuantity: bid.TotalQuantity,
                 createdAt: bid.CreatedAt);
         }
-        catch (RpcException)
+        catch (ReturnStatusException)
         {
             await transaction.RollbackAsync();
             throw;
@@ -710,7 +712,7 @@ public class OrderBookHelper(
         catch (Exception)
         {
             await transaction.RollbackAsync();
-            throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_CREATE_BID));
+            throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_CREATE_BID);
         }
     }
 
@@ -737,7 +739,7 @@ public class OrderBookHelper(
                 .Where(x => x.Id == request.BidId && x.ItemConfig != null)
                 .Select(x => new { x.ItemConfigId, x.ItemConfig.IsUnary })
                 .FirstOrDefaultAsync()
-                    ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.BID_NOT_FOUND));
+                    ?? throw new NoRetryReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.BID_NOT_FOUND);
 
             IDistributedSynchronizationHandle userLock;
             IDistributedSynchronizationHandle? rwItemLock = null;
@@ -746,8 +748,8 @@ public class OrderBookHelper(
             if (!itemConfigFields.IsUnary)
             {
                 userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetNonUnaryUserLock(itemConfigFields.ItemConfigId, userId))
-                    ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
-                        AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+                    ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                        AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
                 // wait for matching worker if not unary
                 rwItemLock = await _rwLockProvider.AcquireReadLockAsync(LockKeys.GetItemMatchingLock(itemConfigFields.ItemConfigId));
@@ -755,8 +757,8 @@ public class OrderBookHelper(
             else
             {
                 userLock = await _lockProvider.TryAcquireLockAsync(LockKeys.GetUnaryUserLock(itemConfigFields.ItemConfigId, userId))
-                    ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
-                        AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+                    ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                        AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
                 unaryLock = await _lockProvider.AcquireLockAsync(LockKeys.GetUnaryLock(itemConfigFields.ItemConfigId));
             }
@@ -776,8 +778,8 @@ public class OrderBookHelper(
                         b.RemainingQuantity,
                         b.BidPrice
                     })
-                    .FirstOrDefaultAsync() 
-                        ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.NOTHING_TO_REMOVE_BID));
+                    .FirstOrDefaultAsync()
+                        ?? throw new NoRetryReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.NOTHING_TO_REMOVE_BID);
 
                 int bidsUpdated = 0;
                 var quantityToRemove = bidFields.RemainingQuantity;
@@ -801,8 +803,8 @@ public class OrderBookHelper(
                 }
 
                 if (bidsUpdated != 1)
-                    throw new RpcException(new Status(StatusCode.FailedPrecondition,
-                        AuctionErrorCodes.BID_REMOVING_CONFLICT));
+                    throw new ReturnStatusException(StatusCode.FailedPrecondition,
+                        AuctionErrorCodes.BID_REMOVING_CONFLICT);
 
                 var returningMoney = checked(bidFields.BidPrice * quantityToRemove);
                 if (returningMoney > 0)
@@ -822,9 +824,9 @@ public class OrderBookHelper(
             catch (OverflowException)
             {
                 await transaction.RollbackAsync();
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE);
             }
-            catch (RpcException)
+            catch (ReturnStatusException)
             {
                 await transaction.RollbackAsync();
                 throw;
@@ -832,7 +834,7 @@ public class OrderBookHelper(
             catch (Exception)
             {
                 await transaction.RollbackAsync();
-                throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_REMOVE_BID));
+                throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_REMOVE_BID);
             }
             finally
             {
@@ -850,7 +852,7 @@ public class OrderBookHelper(
     public async UnaryResult<BidCollectedDto> CollectBid(Guid userId, CollectBidDto request)
     {
         if (request.Quantity <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_QUANTITY);
 
         return await GetRetryPolicy().ExecuteAsync(async () =>
         {
@@ -860,7 +862,7 @@ public class OrderBookHelper(
                 .Where(x => x.Id == request.BidId && x.ItemConfig != null)
                 .Select(x => _mapper.Map<ItemConfigDto>(x.ItemConfig))
                 .FirstOrDefaultAsync()
-                    ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.BID_NOT_FOUND));
+                    ?? throw new NoRetryReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.BID_NOT_FOUND);
 
             // No worker lock needed
             // No Non-User Unary lock needed 
@@ -870,8 +872,8 @@ public class OrderBookHelper(
                     LockKeys.GetNonUnaryUserLock(itemConfigDto.Id, userId);
 
             using var userLock = await _lockProvider.TryAcquireLockAsync(userLockKey)
-                ?? throw new NoRetryRpcException(new Status(StatusCode.FailedPrecondition,
-                    AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING));
+                ?? throw new NoRetryReturnStatusException(StatusCode.FailedPrecondition,
+                    AuctionErrorCodes.ITEM_ALREADY_IN_PROCESSING);
 
             using var transaction = await aucyDb.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 
@@ -889,22 +891,22 @@ public class OrderBookHelper(
                         b.RemainingQuantity,
                         b.BidPrice
                     })
-                    .FirstOrDefaultAsync() 
-                        ?? throw new NoRetryRpcException(new Status(StatusCode.NotFound,
-                            AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_BID));
+                    .FirstOrDefaultAsync()
+                        ?? throw new NoRetryReturnStatusException(StatusCode.NotFound,
+                            AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_BID);
 
                 // Check if any items were bought
                 if (bidFields.RemainingQuantity == bidFields.TotalQuantity)
-                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_BID));
+                    throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_BID);
 
                 var boughtQuantity = bidFields.TotalQuantity - bidFields.RemainingQuantity;
 
                 var takeQuantity = request.Quantity;
 
                 if (takeQuantity > boughtQuantity)
-                    throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, 
-                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_BID));
+                    throw new NoRetryReturnStatusException(StatusCode.InvalidArgument,
+                        AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_BID);
 
                 int bidsUpdated;
 
@@ -919,7 +921,7 @@ public class OrderBookHelper(
                             x.SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
                         });
 
-                    
+
                 }
                 else
                 {
@@ -931,7 +933,7 @@ public class OrderBookHelper(
                 }
 
                 if (bidsUpdated != 1)
-                    throw new RpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_BID));
+                    throw new ReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.NOT_ENOUGH_TO_COLLECT_BID);
 
                 // Add purchased items to user's inventory
                 var usedCapacityDiff = await _itemsService.UpdateOrInsertItemStack(aucyDb, bidFields.ItemConfigId,
@@ -959,9 +961,9 @@ public class OrderBookHelper(
             catch (OverflowException)
             {
                 await transaction.RollbackAsync();
-                throw new NoRetryRpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE));
+                throw new NoRetryReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.AMOUNT_TOO_LARGE);
             }
-            catch (RpcException)
+            catch (ReturnStatusException)
             {
                 await transaction.RollbackAsync();
                 throw;
@@ -969,7 +971,7 @@ public class OrderBookHelper(
             catch (Exception)
             {
                 await transaction.RollbackAsync();
-                throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_COLLECT_BID));
+                throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.FAILED_TO_COLLECT_BID);
             }
         });
     }
@@ -977,7 +979,7 @@ public class OrderBookHelper(
     private static AsyncRetryPolicy GetRetryPolicy()
     {
         return Policy
-            .Handle<Exception>(ex => ex is not NoRetryRpcException)
+            .Handle<Exception>(ex => ex is not NoRetryReturnStatusException)
             .RetryAsync(3);
     }
 }

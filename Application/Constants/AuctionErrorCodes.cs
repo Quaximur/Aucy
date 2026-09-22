@@ -25,6 +25,7 @@ public static class AuctionErrorCodes
     public const string ITEM_ALREADY_IN_PROCESSING = "ITEM_ALREADY_IN_PROCESSING"; // "Some of your operations with this item is already processing"
     public const string FAILED_TO_ADD_ITEM_STACK = "FAILED_TO_ADD_ITEM_STACK";
     public const string FAILED_TO_REMOVE_ITEMSTACK = "FAILED_TO_REMOVE_ITEMSTACK";
+    public const string NOT_ENOUGH_TO_REMOVE_ITEM_STACK = "NOT_ENOUGH_TO_REMOVE_ITEM_STACK";
 
     // Item Config errors (validation)
     public const string INVALID_ITEM_CONFIG = "INVALID_ITEM_CONFIG";

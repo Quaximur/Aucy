@@ -1,6 +1,8 @@
-﻿using Aucy.Data;
+﻿using Aucy.Application.Constants;
+using Aucy.Data;
 using Aucy.Domain.Entities;
 using Grpc.Core;
+using MagicOnion;
 using Microsoft.EntityFrameworkCore;
 
 namespace Aucy.Application.Helpers;
@@ -27,8 +29,7 @@ public class ItemsHelper()
         }
         else if (updatedItemStacks != 1)
         {
-            throw new RpcException(new Status(StatusCode.NotFound,
-                $"ItemStack is not determined. Entries found: {updatedItemStacks}"));
+            throw new ReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.ITEM_STACK_NOT_FOUND);
         }
 
         return usedCapacityDiff;
@@ -54,8 +55,7 @@ public class ItemsHelper()
 
         if (updatedItemStacks != 1)
         {
-            throw new RpcException(new Status(StatusCode.NotFound,
-                $"ItemStack with specified quantity is not determined. Entries found: {updatedItemStacks}"));
+            throw new ReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.NOT_ENOUGH_TO_REMOVE_ITEM_STACK);
         }
 
         return usedCapacityDiff;

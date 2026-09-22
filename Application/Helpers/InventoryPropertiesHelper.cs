@@ -1,5 +1,7 @@
-﻿using Aucy.Data;
+﻿using Aucy.Application.Constants;
+using Aucy.Data;
 using Grpc.Core;
+using MagicOnion;
 using Microsoft.EntityFrameworkCore;
 
 namespace Aucy.Application.Helpers;
@@ -36,7 +38,7 @@ public class InventoryPropertiesHelper()
             }
 
             if (updatedRows != 1)
-                throw new RpcException(new Status(StatusCode.NotFound, "Inventory is not determined. Can`t update properties"));
+                throw new ReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.INVENTORY_NOT_FOUND);
         }
     }
 
@@ -47,7 +49,7 @@ public class InventoryPropertiesHelper()
             .ExecuteUpdateAsync(x => x.SetProperty(i => i.Money, i => i.Money - amount));
 
         if (updatedRows != 1)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Not enough money"));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INSUFFICIENT_MONEY);
     }
 
     public async Task DepositMoney(AucyDbContext aucyDb, Guid userId, long amount)
@@ -57,6 +59,6 @@ public class InventoryPropertiesHelper()
             .ExecuteUpdateAsync(x => x.SetProperty(i => i.Money, i => i.Money + amount));
 
         if (updatedRows != 1)
-            throw new RpcException(new Status(StatusCode.NotFound, "Inventory is not determined. Can`t add money"));
+            throw new ReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.INVENTORY_NOT_FOUND);
     }
 }

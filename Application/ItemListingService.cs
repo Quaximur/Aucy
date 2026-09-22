@@ -33,7 +33,7 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
                 .Where(x => x.Id == itemConfigId)
                 .Select(x => new { x.MinPrice, x.MaxPrice, x.PriceTierCount })
                 .FirstOrDefaultAsync(cancellationToken)
-                    ?? throw new RpcException(new Status(StatusCode.NotFound, AuctionErrorCodes.ITEM_CONFIG_NOT_FOUND));
+                    ?? throw new ReturnStatusException(StatusCode.NotFound, AuctionErrorCodes.ITEM_CONFIG_NOT_FOUND);
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -50,7 +50,7 @@ public class ItemListingService(AucyDbContext aucyDbContext, IPriceTierQuantizer
         }
         catch (Exception)
         {
-            throw new RpcException(new Status(StatusCode.Internal, AuctionErrorCodes.LISTING_STREAM_INTERRUPTED));
+            throw new ReturnStatusException(StatusCode.Internal, AuctionErrorCodes.LISTING_STREAM_INTERRUPTED);
         }
 
         return stream.Result();

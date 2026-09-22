@@ -8,6 +8,7 @@ using MagicOnion.Server.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
+using MagicOnion;
 
 namespace Aucy.Application;
 
@@ -58,8 +59,8 @@ public class OrderHub(WorkerGroupService workerGroupService,
                     weightLimit: x.WeightLimit,
                     usedWeight: x.UsedWeight
                 ))
-                .FirstOrDefaultAsync() ?? throw new RpcException(new Status(StatusCode.NotFound,
-                    AuctionErrorCodes.INVENTORY_NOT_FOUND));
+                .FirstOrDefaultAsync() ?? throw new ReturnStatusException(StatusCode.NotFound,
+                    AuctionErrorCodes.INVENTORY_NOT_FOUND);
 
         var lotsWithItemConfigs = await aucyDb.Lots
            .Where(l => l.OwnerUserId == _userId)

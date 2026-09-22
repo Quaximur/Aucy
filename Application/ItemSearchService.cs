@@ -26,10 +26,10 @@ public class ItemSearchService(AucyDbContext aucyDbContext,
     public async UnaryResult<ItemConfigsDto> GetItemConfigs(GetItemConfigsDto request)
     {
         if (request.Page <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PAGE_NUMBER));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PAGE_NUMBER);
 
         if (request.PageSize <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PAGE_SIZE));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PAGE_SIZE);
 
         var query = _aucyDb.ItemConfigs.AsQueryable();
 
