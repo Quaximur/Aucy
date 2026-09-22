@@ -63,7 +63,7 @@ try
     services.AddSingleton<ItemsHelper>();
     services.AddSingleton<WorkerGroupService>();
     // Price tier quantizer (stateless) singleton
-    services.AddSingleton<Aucy.Application.Helpers.IPriceTierQuantizer, Aucy.Application.Helpers.PriceTierQuantizer>();
+    services.AddSingleton<IPriceTierQuantizer, PriceTierQuantizer>();
 
     services.AddGrpc();
 

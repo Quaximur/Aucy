@@ -17,7 +17,7 @@ public static class WorkerBoot
         {
             using IServiceScope startupScope = host.Services.CreateScope();
             using AucyDbContext aucyDb = startupScope.ServiceProvider.GetRequiredService<AucyDbContext>();
-            var logger = startupScope.ServiceProvider.GetRequiredService<ILogger>();
+            var logger = startupScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
             await EnsureItemsCreatedAsync(defaultItems, aucyDb, logger);
         }
