@@ -7,21 +7,28 @@ namespace Aucy.Contracts.OnionClient
     [MessagePackObject]
     public class ItemConfigWithRichListingDto : ItemConfigDto
     {
-        [Key(10)] public LotDto[] Lots { get; set; }
-        [Key(11)] public BidDto[] Bids { get; set; }
+        [Key(50)] public LotDto[] Lots { get; set; }
+        [Key(51)] public BidDto[] Bids { get; set; }
+
+        public ItemConfigWithRichListingDto() { }
 
         public ItemConfigWithRichListingDto(Guid id,
             string name,
             bool isUnary,
             string icon,
-            int? grade,
-            int? rarity,
+            int grade,
+            int rarity,
             float weight,
             string baseType,
             List<string> extra,
             string categoryPath,
             LotDto[] lots,
-            BidDto[] bids)
+            BidDto[] bids,
+            long minPrice,
+            long maxPrice,
+            int maxSellQuantity,
+            int maxBuyQuantity,
+            int priceTierCount)
 
             : base(id: id,
                   name: name,
@@ -32,7 +39,12 @@ namespace Aucy.Contracts.OnionClient
                   weight: weight,
                   baseType: baseType,
                   extra: extra,
-                  categoryPath: categoryPath)
+                  categoryPath: categoryPath,
+                  minPrice: minPrice,
+                  maxPrice: maxPrice,
+                  maxSellQuantity: maxSellQuantity,
+                  maxBuyQuantity: maxBuyQuantity,
+                  priceTierCount: priceTierCount)
         {
             Lots = lots;
             Bids = bids;

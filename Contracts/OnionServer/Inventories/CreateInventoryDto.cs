@@ -7,5 +7,11 @@ namespace Aucy.Contracts.OnionServer
     {
         [Key(0)] public int Capacity { get; set; }
         [Key(1)] public float WeightLimit { get; set; }
+
+        public CreateInventoryDto(int capacity, float weightLimit)
+        {
+            Capacity = capacity;
+            WeightLimit = weightLimit;
+        }
     }
 }

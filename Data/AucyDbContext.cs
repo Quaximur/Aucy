@@ -1,6 +1,5 @@
 ﻿using Aucy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using System.Reflection.Emit;
 
 namespace Aucy.Data;
 
@@ -95,14 +94,23 @@ public class AucyDbContext : DbContext
         builder.HasCheckConstraint<Bid>("TotalQuantity", ">= 1");
         builder.HasCheckConstraint<Bid>("RemainingQuantity", ">= 0");
 
+        builder.HasCheckConstraint<ItemConfig>("MinPrice", ">= 1");
+        builder.HasCheckConstraint<ItemConfig>("MinPrice", "<= \"MaxPrice\"");
+        builder.HasCheckConstraint<ItemConfig>("MaxPrice", ">= 1");
+        builder.HasCheckConstraint<ItemConfig>("MaxPrice", $"<= {1_000_000_000_000_000}"); 
+        builder.HasCheckConstraint<ItemConfig>("MaxSellQuantity", ">= 1");
+        builder.HasCheckConstraint<ItemConfig>("MaxSellQuantity", "<= 5000");
+        builder.HasCheckConstraint<ItemConfig>("MaxBuyQuantity", ">= 1");
+        builder.HasCheckConstraint<ItemConfig>("MaxBuyQuantity", "<= 5000");
+
         builder.HasCheckConstraint<ItemStack>("Quantity", ">= 1");
 
         builder.HasCheckConstraint<Inventory>("Money", ">= 0");
         builder.HasCheckConstraint<Inventory>("Capacity", ">= 0");
         builder.HasCheckConstraint<Inventory>("UsedCapacity", ">= 0");
-        builder.HasCheckConstraint<Inventory>("UsedCapacity", "<= [Capacity]");
+        builder.HasCheckConstraint<Inventory>("UsedCapacity", "<= \"Capacity\"");
         builder.HasCheckConstraint<Inventory>("WeightLimit", ">= 0");
         builder.HasCheckConstraint<Inventory>("UsedWeight", ">= 0");
-        builder.HasCheckConstraint<Inventory>("UsedWeight", "<= [WeightLimit]");
+        builder.HasCheckConstraint<Inventory>("UsedWeight", "<= \"WeightLimit\"");
     }
 }

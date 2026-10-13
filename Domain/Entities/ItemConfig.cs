@@ -21,8 +21,8 @@ public class ItemConfig
     /// </summary>
     public bool IsUnary { get; set; }
     public required string Icon { get; set; }
-    public int? Grade { get; set; }
-    public int? Rarity { get; set; }
+    public required int Grade { get; set; }
+    public required int Rarity { get; set; }
 
     [Range(0, float.MaxValue)]
     public float Weight { get; set; }
@@ -40,20 +40,40 @@ public class ItemConfig
     public List<string> Extra { get; set; } = [];
     public required string CategoryPath { get; set; }
 
+    [Range(1, 1_000_000_000_000_000)]
+    public long MinPrice { get; set; }
+
+    [Range(1, 1_000_000_000_000_000)]
+    public long MaxPrice { get; set; }
+
+    [Range(1, 5_000)]
+    public int PriceTierCount { get; set; }
+
+    [Range(1, 5_000)]
+    public int MaxSellQuantity { get; set; }
+
+    [Range(1, 5_000)]
+    public int MaxBuyQuantity { get; set; }
+
     public List<Lot> Lots { get; set; } = [];
     public List<Bid> Bids { get; set; } = [];
     public List<ItemStack> ItemStacks { get; set; } = [];
 
-    public static ItemConfig Create(Guid id, 
-        string name, 
-        bool isUnary, 
-        string icon, 
-        int? grade, 
-        int? rarity,
+    public static ItemConfig Create(Guid id,
+        string name,
+        bool isUnary,
+        string icon,
+        int grade,
+        int rarity,
         float weight,
-        string baseType, 
-        List<string>? extra, 
-        string categoryPath)
+        string baseType,
+        List<string>? extra,
+        string categoryPath,
+        long minPrice,
+        long maxPrice,
+        int priceTierCount,
+        int maxSellQuantity,
+        int maxBuyQuantity)
     {
         return new ItemConfig
         {
@@ -66,7 +86,12 @@ public class ItemConfig
             Weight = weight,
             BaseType = baseType,
             Extra = extra ?? [],
-            CategoryPath = categoryPath
+            CategoryPath = categoryPath,
+            MinPrice = minPrice,
+            MaxPrice = maxPrice,
+            PriceTierCount = priceTierCount,
+            MaxSellQuantity = maxSellQuantity,
+            MaxBuyQuantity = maxBuyQuantity
         };
     }
 }

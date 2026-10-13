@@ -8,12 +8,14 @@ namespace Aucy.Contracts.OnionClient
     [MessagePackObject]
     public readonly struct RawBidTuple
     {
-        [Key(0)] public long BidPrice { get; }
-        [Key(1)] public long RemainingQuantity { get; }
+        [Key(0)] public long MinBidPrice { get; }
+        [Key(1)] public long MaxBidPrice { get; }
+        [Key(2)] public long RemainingQuantity { get; }
 
-        public RawBidTuple(long bidPrice, long remainingQuantity)
+        public RawBidTuple(long minBidPrice, long maxBidPrice, long remainingQuantity)
         {
-            BidPrice = bidPrice;
+            MinBidPrice = minBidPrice;
+            MaxBidPrice = maxBidPrice;
             RemainingQuantity = remainingQuantity;
         }
     }

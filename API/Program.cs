@@ -1,217 +1,121 @@
 using Aucy.API.Extensions;
 using Aucy.Application;
-using Aucy.Application.Auth;
 using Aucy.Application.Helpers;
 using Aucy.Application.Mappings;
+using Aucy.Contracts.OnionClient;
 using Aucy.Data;
-using Aucy.Domain.Entities;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using System.Net;
+/// Configuration:
+/// 1 <= maxSellQuantity <= 5000
+/// 1 <= maxBuyQuantity <= 5000
+/// 1 <= minPrice <= 10^15 (both lot and bid)
+/// 1 <= maxPrice <= 10^15 (both lot and bid)
+/// NonUnary items pre-created on the server side
+///
 
-var builder = WebApplication.CreateBuilder(args);
-var services = builder.Services;
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-DotNetEnv.Env.TraversePath().Load();
-
-builder.WebHost.ConfigureKestrel(options =>
+try
 {
-    options.Listen(IPAddress.Any, 8765, listenOptions =>
+    Log.Information("Starting server.");
+
+    var builder = WebApplication.CreateBuilder(args);
+    var services = builder.Services;
+
+    DotNetEnv.Env.TraversePath().Load();
+
+    builder.WebHost.ConfigureKestrel(options =>
     {
-        listenOptions.Protocols = HttpProtocols.Http2;
-    });
-});
-
-builder.AddDataServices();
-
-builder.Logging.AddConsole();
-builder.Logging.SetMinimumLevel(LogLevel.Information);
-
-services.AddMagicOnion();
-
-services.AddTransient<OrderBookWorker>();
-
-services.AddScoped<InventoryPropertiesService>();
-services.AddScoped<ItemsService>();
-
-services.AddApiAuth();
-
-services.AddAutoMapper(x =>
-{
-    x.AddProfile<ItemConfigMapping>();
-    x.AddProfile<LotMapping>();
-    x.AddProfile<BidMapping>();
-});
-
-if (builder.Environment.IsDevelopment())
-{
-    //services.AddSwaggerGen();
-}
-
-
-var app = builder.Build();
-
-{
-    using IServiceScope s = app.Services.CreateScope();
-
-    using AucyDbContext ctx = s.ServiceProvider.GetRequiredService<AucyDbContext>();
-
-    if (app.Environment.IsDevelopment())
-    {
-        //app.UseSwagger();
-        //app.UseSwaggerUI();
-
-        ctx.Database.Migrate();
-
-        app.MapGroup("/dev").MapGet("/token/{userId}", (IJwtProvider jwtProvider, Guid userId) =>
+        options.Listen(IPAddress.Any, 17537, listenOptions =>
         {
-            return jwtProvider.GenerateToken(userId);
+            listenOptions.Protocols = HttpProtocols.Http2;
         });
+    });
+
+    services.AddSerilog((services, loggerConfig) => loggerConfig
+       .ReadFrom.Configuration(builder.Configuration)
+       .ReadFrom.Services(services));
+
+    builder.AddDataServices();
+
+    services.AddSingleton<RedisStartupCleanup>();
+
+    var redisConnectionString =
+               Environment.GetEnvironmentVariable("ConnectionStrings__Redis")
+               ?? builder.Configuration.GetConnectionString("Redis");
+
+    if (string.IsNullOrWhiteSpace(redisConnectionString))
+        throw new NullReferenceException("Redis connection string not found");
+
+    services.AddMagicOnion().UseRedisGroup(options =>
+    {
+        options.ConnectionString = redisConnectionString;
+    }, registerAsDefault: true);
+
+    services.AddSingleton<IOrderBookHelper, OrderBookHelper>();
+
+    services.AddSingleton<InventoryPropertiesHelper>();
+    services.AddSingleton<ItemsHelper>();
+    services.AddSingleton<WorkerGroupService>();
+    // Price tier quantizer (stateless) singleton
+    services.AddSingleton<IPriceTierQuantizer, PriceTierQuantizer>();
+
+    services.AddGrpc();
+
+    services.AddApiAuth();
+
+    services.AddAutoMapper(x =>
+    {
+        x.AddProfile<ItemConfigMapping>();
+        x.AddProfile<LotMapping>();
+        x.AddProfile<BidMapping>();
+        x.AddProfile<ItemStackMapping>();
+    });
+
+    if (builder.Environment.IsDevelopment())
+    {
+        //services.AddSwaggerGen();
     }
 
-    await InitializeItemConfigs(ctx);
+
+    var app = builder.Build();
+
+    {
+        using IServiceScope startupScope = app.Services.CreateScope();
+
+        var cleanup = startupScope.ServiceProvider.GetRequiredService<RedisStartupCleanup>();
+        await cleanup.InitCleanupAsync(CancellationToken.None);
+
+        using AucyDbContext ctx = startupScope.ServiceProvider.GetRequiredService<AucyDbContext>();
+
+        if (app.Environment.IsDevelopment())
+        {
+            ctx.Database.Migrate();
+        }
+    }
+
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.MapMagicOnionService<InventoryService>();
+    app.MapMagicOnionService<ItemSearchService>();
+    app.MapMagicOnionService<ItemListingService>();
+    app.MapMagicOnionService<OrderHub>();
+
+    //app.MapGrpcService<WorkerEventPublisherService>();
+
+    app.Run();
 }
-
-app.UseHttpsRedirection();
-
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapMagicOnionService<OrderBookService>();
-app.MapMagicOnionService<InventoryService>();
-app.MapMagicOnionService<InventoryLayoutService>();
-app.MapMagicOnionService<ItemSearchService>();
-app.MapMagicOnionService<ItemListingService>();
-
-app.Run();
-
-async Task InitializeItemConfigs(AucyDbContext ctx)
+catch(Exception e)
 {
-    var defaultItems = new[]
-    {
-        ItemConfig.Create(
-            id: Guid.Parse("00000000-0000-0000-0000-000000000001"),
-            name: "bread",
-            isUnary: false,
-            icon: "bread",
-            grade: null,
-            rarity: 0,
-            weight: 0.1f,
-            baseType: "consumable",
-            extra: null,
-            categoryPath: "food"
-        ),
-
-        ItemConfig.Create(
-            id: Guid.Parse("00000000-0000-0000-0000-000000000002"),
-            name: "iron_ore",
-            isUnary: false,
-            icon: "iron_ore",
-            grade: null,
-            rarity: null,
-            weight: 1.2f,
-            baseType: "iron_ore",
-            extra: null,
-            categoryPath: "materials/ore"
-        ),
-
-        ItemConfig.Create(
-            id: Guid.Parse("00000000-0000-0000-0000-000000000003"),
-            name: "iron_ore_uncommon",
-            isUnary: false,
-            icon: "iron_ore",
-            grade: null,
-            rarity: 1,
-            weight: 1.2f,
-            baseType: "iron_ore",
-            extra: null,
-            categoryPath: "materials/ore"
-        ),
-
-        ItemConfig.Create(
-            id: Guid.Parse("00000000-0000-0000-0000-000000000004"),
-            name: "iron_ore_rare",
-            isUnary: false,
-            icon: "iron_ore",
-            grade: null,
-            rarity: 2,
-            weight: 1.2f,
-            baseType: "iron_ore",
-            extra: null,
-            categoryPath: "materials/ore"
-        ),
-
-        ItemConfig.Create(
-            id: Guid.Parse("00000000-0000-0000-0000-000000000005"),
-            name: "silverleaf_herb",
-            isUnary: false,
-            icon: "silverleaf_herb",
-            grade: null,
-            rarity: null,
-            weight: 0.05f,
-            baseType: "silverleaf_herb",
-            extra: null,
-            categoryPath: "materials/herbs"
-        ),
-
-        ItemConfig.Create(
-            id: Guid.Parse("00000000-0000-0000-0000-000000000006"),
-            name: "wolf_fang",
-            isUnary: false,
-            icon: "wolf_fang",
-            grade: null,
-            rarity: null,
-            weight: 0.15f,
-            baseType: "wolf_fang",
-            extra: null,
-            categoryPath: "loot/beast"
-        ),
-
-        ItemConfig.Create(
-            id: Guid.Parse("00000000-0000-0000-0000-000000000007"),
-            name: "mana_crystal",
-            isUnary: false,
-            icon: "mana_crystal",
-            grade: null,
-            rarity: null,
-            weight: 0.1f,
-            baseType: "mana_crystal",
-            extra: null,
-            categoryPath: "materials/magic"
-        ),
-
-        ItemConfig.Create(
-            id: Guid.Parse("00000000-0000-0000-0000-000000000008"),
-            name: "ancient_coin",
-            isUnary: false,
-            icon: "ancient_coin",
-            grade: null,
-            rarity: null,
-            weight: 0.02f,
-            baseType: "ancient_coin",
-            extra: null,
-            categoryPath: "treasure"
-        ),
-    };
-
-    foreach (var item in defaultItems)
-    {
-        if (!await ctx.ItemConfigs.AnyAsync(x => x.Id == item.Id))
-        {
-            ctx.ItemConfigs.Add(item);
-            Console.WriteLine($"Added item config: {item.Name} with ID: {item.Id}");
-        }
-        else
-        {
-            Console.WriteLine($"Item config already exists: {item.Name} with ID: {item.Id}");
-        }
-    }
-
-    await ctx.SaveChangesAsync();
-
-    foreach (var item in defaultItems)
-    {
-        var orderBookWorker = app.Services.GetRequiredService<OrderBookWorker>();
-        orderBookWorker.RunAsync(item.Id);
-    }
+    Log.Fatal(e, "Server terminated unexpectedly.");
+}
+finally
+{
+    Log.CloseAndFlush();
 }

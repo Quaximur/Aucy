@@ -13,18 +13,19 @@ public static class DI
     public static void AddDataServices(this IHostApplicationBuilder builder)
     {
         var dbContextConnectionString =
-           Environment.GetEnvironmentVariable("ConnectionStrings__AucyDbContext_MS")
+           Environment.GetEnvironmentVariable("ConnectionStrings__AucyDbContext_Postgres") // _MS
            ?? builder.Configuration.GetConnectionString("AucyDbContext");
 
         builder.Services.AddDbContext<AucyDbContext>(options =>
         {
-            options.UseSqlServer(dbContextConnectionString);
-            //options.UseNpgsql(connectionString);
+            // options.UseSqlServer(dbContextConnectionString);
+            options.UseNpgsql(dbContextConnectionString);
         }, optionsLifetime: ServiceLifetime.Singleton);
 
         builder.Services.AddDbContextFactory<AucyDbContext>(options =>
         {
-            options.UseSqlServer(dbContextConnectionString);
+            // options.UseSqlServer(dbContextConnectionString);
+            options.UseNpgsql(dbContextConnectionString);
         });
 
         var redisConnectionString =

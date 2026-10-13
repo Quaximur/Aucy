@@ -8,5 +8,11 @@ namespace Aucy.Contracts.OnionServer
     {
         [Key(0)] public Guid ItemStackId { get; set; }
         [Key(1)] public int Quantity { get; set; }
+
+        public RemoveItemStackDto(Guid itemStackId, int quantity)
+        {
+            ItemStackId = itemStackId;
+            Quantity = quantity;
+        }
     }
 }

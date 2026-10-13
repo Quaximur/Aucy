@@ -10,6 +10,10 @@ namespace Aucy.Contracts.OnionClient
 
         [Key(5)] public int TotalQuantity { get; set; }
         [Key(6)] public DateTime CreatedAt { get; set; }
+
+        /// <summary>
+        /// Unary ItemConfig. null if NonUnary
+        /// </summary>
         [Key(7)] public ItemConfigDto ItemConfig { get; set; }
 
         public OwnBidDto(Guid id,

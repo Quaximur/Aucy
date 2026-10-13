@@ -19,7 +19,12 @@ namespace Aucy.Application.Mappings
                     weight: src.Weight,
                     baseType: src.BaseType,
                     extra: src.Extra,
-                    categoryPath: src.CategoryPath
+                    categoryPath: src.CategoryPath,
+                    minPrice: src.MinPrice,
+                    maxPrice: src.MaxPrice,
+                    priceTierCount: src.PriceTierCount,
+                    maxSellQuantity: src.MaxSellQuantity,
+                    maxBuyQuantity: src.MaxBuyQuantity
                 ));
 
             CreateMap<ItemConfig, ItemConfigDto>()
@@ -33,7 +38,12 @@ namespace Aucy.Application.Mappings
                     weight: src.Weight,
                     baseType: src.BaseType,
                     extra: src.Extra,
-                    categoryPath: src.CategoryPath
+                    categoryPath: src.CategoryPath,
+                    minPrice: src.MinPrice,
+                    maxPrice: src.MaxPrice,
+                    priceTierCount: src.PriceTierCount,
+                    maxSellQuantity: src.MaxSellQuantity,
+                    maxBuyQuantity: src.MaxBuyQuantity
                 ));
         }
     }

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package fbaworker;
+option csharp_namespace = "Aucy.Contracts.ProtoServer";
+option go_package = "contracts/fbaworker";
+
+service WorkerEventPublisher {
+  rpc PublishSold (SoldEvent) returns (PublishAck);
+  rpc PublishBought (BoughtEvent) returns (PublishAck);
+}
+
+message SoldEvent {
+  string user_id = 1;
+  string lot_id = 2;
+  int32 sold_quantity = 3;
+  int64 extra_money = 4;
+}
+
+message BoughtEvent {
+  string user_id = 1;
+  string bid_id = 2;
+  int32 bought_quantity = 3;
+  int64 extra_money = 4;
+}
+
+message PublishAck {
+  bool success = 1;
+  string error = 2;
+}

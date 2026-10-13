@@ -1,6 +1,8 @@
 ﻿using Aucy.Contracts.OnionClient;
+using Aucy.Application.Constants;
 using Aucy.Data;
 using AutoMapper;
+using Microsoft.Extensions.Logging;
 using Grpc.Core;
 using MagicOnion;
 using MagicOnion.Server;
@@ -10,23 +12,24 @@ using Microsoft.EntityFrameworkCore;
 namespace Aucy.Application;
 
 [Authorize]
-public class ItemSearchService(AucyDbContext aucyDbContext, IMapper mapper) : ServiceBase<IItemSearchService>,
+public class ItemSearchService(AucyDbContext aucyDbContext, 
+    IMapper mapper, 
+    ILogger<ItemSearchService> logger) : ServiceBase<IItemSearchService>,
 #pragma warning disable CS8644 
     IItemSearchService
 #pragma warning restore CS8644
 {
     private readonly AucyDbContext _aucyDb = aucyDbContext;
     private readonly IMapper _mapper = mapper;
+    private readonly ILogger<ItemSearchService> _logger = logger;
 
     public async UnaryResult<ItemConfigsDto> GetItemConfigs(GetItemConfigsDto request)
     {
-        Console.WriteLine($"{nameof(GetItemConfigs)} request");
-
         if (request.Page <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Page number should be greater than 0"));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PAGE_NUMBER);
 
         if (request.PageSize <= 0)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Page size should be greater than 0"));
+            throw new ReturnStatusException(StatusCode.InvalidArgument, AuctionErrorCodes.INVALID_PAGE_SIZE);
 
         var query = _aucyDb.ItemConfigs.AsQueryable();
 
@@ -40,6 +43,7 @@ public class ItemSearchService(AucyDbContext aucyDbContext, IMapper mapper) : Se
 
         var itemConfigsList = await query
             .Where(x => !x.IsUnary || x.Lots.Any()) // No zombie configs
+            .OrderBy(x => x.Id)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .Select(x => _mapper.Map<ItemConfigDto>(x))
