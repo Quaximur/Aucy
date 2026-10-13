@@ -8,21 +8,21 @@ Built as a concurrent order book rather than a CRUD API with a `Bids` table.
 
 ## 🛠️ Tech Stack
 
-[![.NET](https://img.shields.io/badge/.NET-10-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://github.com/dotnet/runtime)
-[![ASP.NET Core](https://img.shields.io/badge/ASP.NET_Core-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://github.com/dotnet/aspnetcore)
-[![MagicOnion](https://img.shields.io/badge/MagicOnion-512BD4?style=for-the-badge)](https://github.com/Cysharp/MagicOnion)
-[![gRPC](https://img.shields.io/badge/gRPC-244C5A?style=for-the-badge&logo=google&logoColor=white)](https://github.com/grpc/grpc-dotnet)
-[![MessagePack](https://img.shields.io/badge/MessagePack-000000?style=for-the-badge)](https://github.com/MessagePack-CSharp/MessagePack-CSharp)
+[![.NET](https://img.shields.io/badge/10-512BD4?style=plastic&logo=dotnet&logoColor=white)](https://github.com/dotnet/runtime)
+[![ASP.NET Core](https://img.shields.io/badge/ASP.NET_Core-512BD4?style=plastic&logo=dotnet&logoColor=white)](https://github.com/dotnet/aspnetcore)
+[![MagicOnion](https://img.shields.io/badge/MagicOnion-6F42C1?style=plastic&logo=github&logoColor=white)](https://github.com/Cysharp/MagicOnion)
+[![gRPC](https://img.shields.io/badge/gRPC-2DA6B0?style=plastic&logo=google&logoColor=white)](https://github.com/grpc/grpc-dotnet)
+[![MessagePack](https://img.shields.io/badge/MessagePack-111111?style=plastic&logo=github&logoColor=white)](https://github.com/MessagePack-CSharp/MessagePack-CSharp)
 
-[![Entity Framework Core](https://img.shields.io/badge/EF_Core-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://github.com/dotnet/efcore)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://github.com/postgres/postgres)
-[![StackExchange.Redis](https://img.shields.io/badge/StackExchange.Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://github.com/StackExchange/StackExchange.Redis)
-[![DistributedLock](https://img.shields.io/badge/DistributedLock-Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://github.com/madelson/DistributedLock)
+[![EF Core](https://img.shields.io/badge/EF_Core-512BD4?style=plastic&logo=dotnet&logoColor=white)](https://github.com/dotnet/efcore)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=plastic&logo=postgresql&logoColor=white)](https://github.com/postgres/postgres)
+[![StackExchange.Redis](https://img.shields.io/badge/StackExchange.Redis-DC382D?style=plastic&logo=redis&logoColor=white)](https://github.com/StackExchange/StackExchange.Redis)
+[![DistributedLock](https://img.shields.io/badge/DistributedLock-B7472A?style=plastic&logo=github&logoColor=white)](https://github.com/madelson/DistributedLock)
 
-[![xUnit](https://img.shields.io/badge/xUnit-Tests-5E5E5E?style=for-the-badge)](https://github.com/xunit/xunit)
-[![Testcontainers](https://img.shields.io/badge/Testcontainers-.NET-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/testcontainers/testcontainers-dotnet)
-[![Serilog](https://img.shields.io/badge/Serilog-Logging-1A1A1A?style=for-the-badge)](https://github.com/serilog/serilog)
-[![Polly](https://img.shields.io/badge/Polly-Resilience-2C3E50?style=for-the-badge)](https://github.com/App-vNext/Polly)
+[![xUnit](https://img.shields.io/badge/xUnit-5E5E5E?style=plastic&logo=github&logoColor=white)](https://github.com/xunit/xunit)
+[![Testcontainers](https://img.shields.io/badge/Testcontainers-2496ED?style=plastic&logo=docker&logoColor=white)](https://github.com/testcontainers/testcontainers-dotnet)
+[![Serilog](https://img.shields.io/badge/Serilog-704880?style=plastic&logo=github&logoColor=white)](https://github.com/serilog/serilog)
+[![Polly](https://img.shields.io/badge/Polly-2C3E50?style=plastic&logo=github&logoColor=white)](https://github.com/App-vNext/Polly)
 
 ## ⚡ What's Inside
 
