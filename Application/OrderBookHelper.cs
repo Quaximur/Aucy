@@ -126,7 +126,7 @@ public class OrderBookHelper(
 
             // Can be applied by parts in cycle if numbers are too big.
             if (itemConfigDto.Weight > 0)
-                usedWeightDiff = -InventoryPropertiesHelper.CalculateWeight(itemConfigDto.Weight, request.TotalQuantity);
+                usedWeightDiff = -WeightCalculator.Calculate(itemConfigDto.Weight, request.TotalQuantity);
 
             await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
 
@@ -214,7 +214,7 @@ public class OrderBookHelper(
 
             // Can be applied by parts in cycle if numbers are too large.
             if (itemConfigDto.Weight > 0)
-                usedWeightDiff = -InventoryPropertiesHelper.CalculateWeight(itemConfigDto.Weight, request.TotalQuantity);
+                usedWeightDiff = -WeightCalculator.Calculate(itemConfigDto.Weight, request.TotalQuantity);
 
             await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, weightDiff: usedWeightDiff,
                 capacityDiff: usedCapacityDiff);
@@ -362,7 +362,7 @@ public class OrderBookHelper(
                 float usedWeightDiff = 0;
 
                 if (lotFields.ItemConfigWeight > 0)
-                    usedWeightDiff = InventoryPropertiesHelper.CalculateWeight(lotFields.ItemConfigWeight, quantityToRemove);
+                    usedWeightDiff = WeightCalculator.Calculate(lotFields.ItemConfigWeight, quantityToRemove);
 
                 await _inventoryProperties.ExecuteInventoryUpdate(aucyDb, userId, usedWeightDiff, usedCapacityDiff);
 
@@ -928,7 +928,7 @@ public class OrderBookHelper(
 
                 if (bidFields.ItemConfigWeight > 0)
                 {
-                    usedWeightDiff = InventoryPropertiesHelper.CalculateWeight(bidFields.ItemConfigWeight, takeQuantity);
+                    usedWeightDiff = WeightCalculator.Calculate(bidFields.ItemConfigWeight, takeQuantity);
 
                     if (inventoryFields.UsedWeight > inventoryFields.WeightLimit - usedWeightDiff)
                         throw new NoRetryReturnStatusException(StatusCode.ResourceExhausted,

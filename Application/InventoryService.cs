@@ -104,7 +104,7 @@ public class InventoryService(
 
                 if (itemConfig.Weight > 0)
                 {
-                    usedWeightDiff = InventoryPropertiesHelper.CalculateWeight(itemConfig.Weight, request.Quantity);
+                    usedWeightDiff = WeightCalculator.Calculate(itemConfig.Weight, request.Quantity);
 
                     // x > z - y <=> x + y > z (no overflow)
                     if (inventoryFields.UsedWeight > inventoryFields.WeightLimit - usedWeightDiff)

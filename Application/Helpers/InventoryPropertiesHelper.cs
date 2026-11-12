@@ -8,16 +8,6 @@ namespace Aucy.Application.Helpers;
 
 public class InventoryPropertiesHelper()
 {
-    public static float CalculateWeight(float unitWeight, int quantity)
-    {
-        var weight = unitWeight * quantity;
-
-        if (!float.IsFinite(weight))
-            throw new OverflowException();
-
-        return weight;
-    }
-
     public async Task ExecuteInventoryUpdate(AucyDbContext aucyDb, Guid userId, float weightDiff, int capacityDiff)
     {
         var addUsedCapacity = capacityDiff != 0;
