@@ -57,11 +57,11 @@ namespace Aucy.Data.Migrations
 
                     b.ToTable("Bids", t =>
                         {
-                            t.HasCheckConstraint("CK_TEntity_BidPrice", "\"BidPrice\" >= 1");
+                            t.HasCheckConstraint("CK_Bid_BidPrice", "\"BidPrice\" >= 1");
 
-                            t.HasCheckConstraint("CK_TEntity_RemainingQuantity", "\"RemainingQuantity\" >= 0");
+                            t.HasCheckConstraint("CK_Bid_RemainingQuantity", "\"RemainingQuantity\" >= 0");
 
-                            t.HasCheckConstraint("CK_TEntity_TotalQuantity", "\"TotalQuantity\" >= 1");
+                            t.HasCheckConstraint("CK_Bid_TotalQuantity", "\"TotalQuantity\" >= 1");
                         });
                 });
 
@@ -90,15 +90,19 @@ namespace Aucy.Data.Migrations
 
                     b.ToTable("Inventories", t =>
                         {
-                            t.HasCheckConstraint("CK_TEntity_Capacity", "\"Capacity\" >= 0");
+                            t.HasCheckConstraint("CK_Inventory_Capacity", "\"Capacity\" >= 0");
 
-                            t.HasCheckConstraint("CK_TEntity_Money", "\"Money\" >= 0");
+                            t.HasCheckConstraint("CK_Inventory_Money", "\"Money\" >= 0");
 
-                            t.HasCheckConstraint("CK_TEntity_UsedCapacity", "\"UsedCapacity\" <= \"Capacity\"");
+                            t.HasCheckConstraint("CK_Inventory_UsedCapacity_bottom", "\"UsedCapacity\" >= 0");
 
-                            t.HasCheckConstraint("CK_TEntity_UsedWeight", "\"UsedWeight\" <= \"WeightLimit\"");
+                            t.HasCheckConstraint("CK_Inventory_UsedCapacity_top", "\"UsedCapacity\" <= \"Capacity\"");
 
-                            t.HasCheckConstraint("CK_TEntity_WeightLimit", "\"WeightLimit\" >= 0");
+                            t.HasCheckConstraint("CK_Inventory_UsedWeight_bottom", "\"UsedWeight\" >= 0");
+
+                            t.HasCheckConstraint("CK_Inventory_UsedWeight_top", "\"UsedWeight\" <= \"WeightLimit\"");
+
+                            t.HasCheckConstraint("CK_Inventory_WeightLimit", "\"WeightLimit\" >= 0");
                         });
                 });
 
@@ -159,13 +163,21 @@ namespace Aucy.Data.Migrations
 
                     b.ToTable("ItemConfigs", t =>
                         {
-                            t.HasCheckConstraint("CK_TEntity_MaxBuyQuantity", "\"MaxBuyQuantity\" <= 5000");
+                            t.HasCheckConstraint("CK_ItemConfig_MaxBuyQuantity_bottom", "\"MaxBuyQuantity\" >= 1");
 
-                            t.HasCheckConstraint("CK_TEntity_MaxPrice", "\"MaxPrice\" <= 1000000000000000");
+                            t.HasCheckConstraint("CK_ItemConfig_MaxBuyQuantity_top", "\"MaxBuyQuantity\" <= 5000");
 
-                            t.HasCheckConstraint("CK_TEntity_MaxSellQuantity", "\"MaxSellQuantity\" <= 5000");
+                            t.HasCheckConstraint("CK_ItemConfig_MaxPrice_bottom", "\"MaxPrice\" >= 1");
 
-                            t.HasCheckConstraint("CK_TEntity_MinPrice", "\"MinPrice\" <= \"MaxPrice\"");
+                            t.HasCheckConstraint("CK_ItemConfig_MaxPrice_top", "\"MaxPrice\" <= 1000000000000000");
+
+                            t.HasCheckConstraint("CK_ItemConfig_MaxSellQuantity_bottom", "\"MaxSellQuantity\" >= 1");
+
+                            t.HasCheckConstraint("CK_ItemConfig_MaxSellQuantity_top", "\"MaxSellQuantity\" <= 5000");
+
+                            t.HasCheckConstraint("CK_ItemConfig_MinPrice_bottom", "\"MinPrice\" >= 1");
+
+                            t.HasCheckConstraint("CK_ItemConfig_MinPrice_top", "\"MinPrice\" <= \"MaxPrice\"");
                         });
                 });
 
@@ -201,7 +213,7 @@ namespace Aucy.Data.Migrations
 
                     b.ToTable("ItemStacks", t =>
                         {
-                            t.HasCheckConstraint("CK_TEntity_Quantity", "\"Quantity\" >= 1");
+                            t.HasCheckConstraint("CK_ItemStack_Quantity", "\"Quantity\" >= 1");
                         });
                 });
 
@@ -242,13 +254,13 @@ namespace Aucy.Data.Migrations
 
                     b.ToTable("Lots", t =>
                         {
-                            t.HasCheckConstraint("CK_TEntity_ExtraSoldoutMoney", "\"ExtraSoldoutMoney\" >= 0");
+                            t.HasCheckConstraint("CK_Lot_ExtraSoldoutMoney", "\"ExtraSoldoutMoney\" >= 0");
 
-                            t.HasCheckConstraint("CK_TEntity_RemainingQuantity", "\"RemainingQuantity\" >= 0");
+                            t.HasCheckConstraint("CK_Lot_RemainingQuantity", "\"RemainingQuantity\" >= 0");
 
-                            t.HasCheckConstraint("CK_TEntity_TotalQuantity", "\"TotalQuantity\" >= 1");
+                            t.HasCheckConstraint("CK_Lot_TotalQuantity", "\"TotalQuantity\" >= 1");
 
-                            t.HasCheckConstraint("CK_TEntity_UnitPrice", "\"UnitPrice\" >= 1");
+                            t.HasCheckConstraint("CK_Lot_UnitPrice", "\"UnitPrice\" >= 1");
                         });
                 });
 

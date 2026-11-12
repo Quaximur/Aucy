@@ -94,23 +94,23 @@ public class AucyDbContext : DbContext
         builder.HasCheckConstraint<Bid>("TotalQuantity", ">= 1");
         builder.HasCheckConstraint<Bid>("RemainingQuantity", ">= 0");
 
-        builder.HasCheckConstraint<ItemConfig>("MinPrice", ">= 1");
-        builder.HasCheckConstraint<ItemConfig>("MinPrice", "<= \"MaxPrice\"");
-        builder.HasCheckConstraint<ItemConfig>("MaxPrice", ">= 1");
-        builder.HasCheckConstraint<ItemConfig>("MaxPrice", $"<= {1_000_000_000_000_000}"); 
-        builder.HasCheckConstraint<ItemConfig>("MaxSellQuantity", ">= 1");
-        builder.HasCheckConstraint<ItemConfig>("MaxSellQuantity", "<= 5000");
-        builder.HasCheckConstraint<ItemConfig>("MaxBuyQuantity", ">= 1");
-        builder.HasCheckConstraint<ItemConfig>("MaxBuyQuantity", "<= 5000");
+        builder.HasCheckConstraint<ItemConfig>("MinPrice", ">= 1", "bottom");
+        builder.HasCheckConstraint<ItemConfig>("MinPrice", "<= \"MaxPrice\"", "top");
+        builder.HasCheckConstraint<ItemConfig>("MaxPrice", ">= 1", "bottom");
+        builder.HasCheckConstraint<ItemConfig>("MaxPrice", $"<= {1_000_000_000_000_000}", "top");
+        builder.HasCheckConstraint<ItemConfig>("MaxSellQuantity", ">= 1", "bottom");
+        builder.HasCheckConstraint<ItemConfig>("MaxSellQuantity", "<= 5000", "top");
+        builder.HasCheckConstraint<ItemConfig>("MaxBuyQuantity", ">= 1", "bottom");
+        builder.HasCheckConstraint<ItemConfig>("MaxBuyQuantity", "<= 5000", "top");
 
         builder.HasCheckConstraint<ItemStack>("Quantity", ">= 1");
 
         builder.HasCheckConstraint<Inventory>("Money", ">= 0");
         builder.HasCheckConstraint<Inventory>("Capacity", ">= 0");
-        builder.HasCheckConstraint<Inventory>("UsedCapacity", ">= 0");
-        builder.HasCheckConstraint<Inventory>("UsedCapacity", "<= \"Capacity\"");
+        builder.HasCheckConstraint<Inventory>("UsedCapacity", ">= 0", "bottom");
+        builder.HasCheckConstraint<Inventory>("UsedCapacity", "<= \"Capacity\"", "top");
         builder.HasCheckConstraint<Inventory>("WeightLimit", ">= 0");
-        builder.HasCheckConstraint<Inventory>("UsedWeight", ">= 0");
-        builder.HasCheckConstraint<Inventory>("UsedWeight", "<= \"WeightLimit\"");
+        builder.HasCheckConstraint<Inventory>("UsedWeight", ">= 0", "bottom");
+        builder.HasCheckConstraint<Inventory>("UsedWeight", "<= \"WeightLimit\"", "top");
     }
 }
