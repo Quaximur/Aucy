@@ -25,7 +25,7 @@ public static class WorkerBoot
         foreach (var item in defaultItems)
         {
             var orderBookWorker = host.Services.GetRequiredService<OrderBookWorker>();
-            orderBookWorker.RunAsync(item.Id);
+            _ = orderBookWorker.RunAsync(item.Id);
         }
     }
 

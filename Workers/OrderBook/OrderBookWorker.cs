@@ -62,11 +62,19 @@ public sealed partial class OrderBookWorker(
     private const int INTERVAL_MS = 1000;
     private const int BATCH_UPDATE_SIZE = 1000;
 
-    public async void RunAsync(Guid itemConfigId)
+    public async Task RunAsync(Guid itemConfigId)
     {
         while (true)
         {
-            await ProcessMatchingTickAsyncV3(itemConfigId);
+            try
+            {
+                await ProcessMatchingTickAsyncV3(itemConfigId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Matching tick failed for itemConfig {ItemConfigId}", itemConfigId);
+            }
+
             await Task.Delay(INTERVAL_MS);
         }
     }
@@ -262,13 +270,14 @@ public sealed partial class OrderBookWorker(
                 // (user create lot x15 -> Matching Item x15 -> worker sends notification x15 sold -> user remove lot x15 ->
                 // user gets error (nothing to remove) -> user gets notification x15 sold)
             }
-            catch
+            catch (Exception ex)
             {
-                _logger.LogError("Worker failed to notify clients");
+                _logger.LogError(ex, "Worker failed to notify clients for itemConfig {ItemConfigId}", itemConfigId);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Matching failed for itemConfig {ItemConfigId}, rolling back", itemConfigId);
             await transaction.RollbackAsync();
         }
     }

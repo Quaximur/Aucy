@@ -76,7 +76,7 @@ public class OrderHub(WorkerGroupService workerGroupService,
 
         var bids = new OwnBidsDto(ownBids);
 
-        _room?.All.OnJoin(lots, bids, inventory);
+        Client.OnJoin(lots, bids, inventory);
     }
 
     protected override async ValueTask OnDisconnected()

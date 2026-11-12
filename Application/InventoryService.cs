@@ -92,8 +92,11 @@ public class InventoryService(
                         itemConfig.Id, itemConfig.Name);
                 }
 
+                var hasItemStack = await aucyDb.ItemStacks
+                    .AnyAsync(x => x.InventoryId == inventoryFields.Id && x.ConfigId == itemConfig.Id);
+
                 // x > z - y <=> x + y > z (no overflow)
-                if (inventoryFields.UsedCapacity > inventoryFields.Capacity - 1)
+                if (!hasItemStack && inventoryFields.UsedCapacity > inventoryFields.Capacity - 1)
                     throw new NoRetryReturnStatusException(StatusCode.ResourceExhausted, 
                         AuctionErrorCodes.INVENTORY_CAPACITY_EXCEEDED);
 
@@ -101,7 +104,7 @@ public class InventoryService(
 
                 if (itemConfig.Weight > 0)
                 {
-                    usedWeightDiff = checked(itemConfig.Weight * request.Quantity);
+                    usedWeightDiff = InventoryPropertiesHelper.CalculateWeight(itemConfig.Weight, request.Quantity);
 
                     // x > z - y <=> x + y > z (no overflow)
                     if (inventoryFields.UsedWeight > inventoryFields.WeightLimit - usedWeightDiff)
