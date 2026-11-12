@@ -472,6 +472,7 @@ public class OrderBookHelper(
                         .ExecuteUpdateAsync(x =>
                         {
                             x.SetProperty(x => x.TotalQuantity, x => x.TotalQuantity - takeQuantity);
+                            x.SetProperty(x => x.ExtraSoldoutMoney, 0);
                         });
                 }
                 else // lot is sold
