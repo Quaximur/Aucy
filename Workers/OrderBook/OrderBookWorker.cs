@@ -417,7 +417,7 @@ public sealed partial class OrderBookWorker(
             await aucyDb.Database.ExecuteSqlRawAsync($@"
                 UPDATE ""Lots"" AS l
                 SET ""RemainingQuantity"" = v.qty,
-                ""ExtraSoldoutMoney"" = v.ext
+                ""ExtraSoldoutMoney"" = l.""ExtraSoldoutMoney"" + v.ext
                 FROM (VALUES {string.Join(", ", valuesList)}) AS v(id, qty, ext)
                 WHERE l.""Id"" = v.id",
                 parameters);
